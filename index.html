@@ -643,6 +643,60 @@ function buildProductImport(rows, updateExisting, src){
   return {items:out,isNew,isUpd,skipped,noCode,levels:lv.map((m,l)=>m?P.labels[l]:null).filter(Boolean),hasCost:C.cost>=0};
 }
 
+/* ============================================================
+   CAMERA SCANNER — barcodes & QR codes
+   Uses the phone's built-in detector when there is one (Chrome on Android),
+   otherwise the bundled ZXing decoder (vendor/zxing.min.js, Apache-2.0).
+   Hand-held USB/Bluetooth scanners need none of this: they type the code + Enter.
+   ============================================================ */
+const Scanner = {
+  stream:null, timer:null, detector:null, zx:null, last:"", lastAt:0, torch:false,
+  async _loadZX(){
+    if(!window.ZXing) await new Promise((ok,bad)=>{ const sc=document.createElement("script"); sc.src="vendor/zxing.min.js"; sc.onload=ok; sc.onerror=()=>bad(new Error("Couldn't load the scanner")); document.head.appendChild(sc); });
+    const Z=window.ZXing, hints=new Map();
+    hints.set(Z.DecodeHintType.TRY_HARDER,true);
+    hints.set(Z.DecodeHintType.POSSIBLE_FORMATS,["QR_CODE","EAN_13","EAN_8","UPC_A","UPC_E","CODE_128","CODE_39","CODE_93","ITF","CODABAR","DATA_MATRIX","PDF_417"].map(f=>Z.BarcodeFormat[f]));
+    this.zx=new Z.MultiFormatReader(); this.zx.setHints(hints);
+  },
+  async start(video,onCode){
+    this.stop();
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("this browser can't open the camera here — type or use a hand-held scanner");
+    this.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}}});
+    video.srcObject=this.stream; video.setAttribute("playsinline",""); video.muted=true; await video.play();
+    this.detector=null;
+    if("BarcodeDetector" in window){ try{ const f=await window.BarcodeDetector.getSupportedFormats(); if(f&&f.length) this.detector=new window.BarcodeDetector({formats:f}); }catch(e){} }
+    if(!this.detector && !this.zx) await this._loadZX();
+    let c=null, ctx=null;   // only needed for the ZXing decoder
+    const tick=async()=>{
+      if(!this.stream) return;
+      let code=null;
+      try{
+        if(video.readyState>=2 && video.videoWidth){
+          if(this.detector){ const r=await this.detector.detect(video); if(r&&r.length) code=r[0].rawValue; }
+          else {
+            if(!c){ c=document.createElement("canvas"); ctx=c.getContext("2d",{willReadFrequently:true}); }
+            const k=Math.min(1,900/Math.max(video.videoWidth,video.videoHeight));
+            c.width=Math.round(video.videoWidth*k); c.height=Math.round(video.videoHeight*k);
+            ctx.drawImage(video,0,0,c.width,c.height);
+            const Z=window.ZXing;
+            try{ code=this.zx.decode(new Z.BinaryBitmap(new Z.HybridBinarizer(new Z.HTMLCanvasElementLuminanceSource(c)))).getText(); }catch(e){}
+          } }
+      }catch(e){}
+      if(code && !(code===this.last && Date.now()-this.lastAt<2500)){
+        this.last=code; this.lastAt=Date.now(); this.beep(); try{ navigator.vibrate&&navigator.vibrate(60); }catch(e){}
+        try{ onCode(code); }catch(e){ console.error(e); } }
+      if(this.stream) this.timer=setTimeout(tick, this.detector?150:250);
+    };
+    tick();
+  },
+  stop(){ clearTimeout(this.timer); if(this.stream){ this.stream.getTracks().forEach(t=>t.stop()); this.stream=null; } this.torch=false; },
+  canTorch(){ const t=this.stream&&this.stream.getVideoTracks()[0]; try{ return !!(t&&t.getCapabilities&&t.getCapabilities().torch); }catch(e){ return false; } },
+  async toggleTorch(){ const t=this.stream&&this.stream.getVideoTracks()[0]; if(!t) return;
+    try{ this.torch=!this.torch; await t.applyConstraints({advanced:[{torch:this.torch}]}); }catch(e){ toast("This camera has no light"); } },
+  beep(){ try{ const A=window.AudioContext||window.webkitAudioContext; if(!A) return; this._ac=this._ac||new A();
+    const o=this._ac.createOscillator(), g=this._ac.createGain(); o.frequency.value=1500; g.gain.value=0.08; o.connect(g); g.connect(this._ac.destination); o.start(); o.stop(this._ac.currentTime+0.08); }catch(e){} }
+};
+
 /* ---- product search (thousands of products: never draw them all at once) ---- */
 function sortedItems(){
   const n=Object.keys(Store.data.items||{}).length;
@@ -652,11 +706,17 @@ function sortedItems(){
   }
   return sortedItems._c;
 }
+// same code? number-only codes also match without leading zeros (scanners add a 0 to UPC / ITF codes)
+function codeMatch(i,q){ q=String(q||"").trim().toLowerCase(); if(!q) return false;
+  const c=(i.code||"").toLowerCase(), b=(i.barcode||"").toLowerCase();
+  if(c===q||b===q) return true;
+  if(/^\d+$/.test(q)){ const z=q.replace(/^0+/,""); return (/^\d+$/.test(c)&&c.replace(/^0+/,"")===z) || (/^\d+$/.test(b)&&b.replace(/^0+/,"")===z); }
+  return false; }
 function findItems(q,limit){
   q=String(q||"").trim().toLowerCase();
   const all=sortedItems();
   if(!q) return {list:all.slice(0,limit),total:all.length};
-  const exact=all.filter(i=>(i.code||"").toLowerCase()===q||(i.barcode||"").toLowerCase()===q);
+  const exact=all.filter(i=>codeMatch(i,q));
   const words=q.split(/\s+/);
   const hits=all.filter(i=>{ const h=((i.name||"")+" "+(i.code||"")+" "+(i.barcode||"")).toLowerCase(); return words.every(w=>h.includes(w)); });
   const list=[...exact,...hits.filter(i=>!exact.includes(i))];
@@ -694,14 +754,14 @@ const PERM_GROUPS=[
   {g:"Sales", items:[["pos","Point of Sale"],["cashup","Daily Cash-up"],["documents","Quotes & Invoices"],["customers","Customers"],["receipts","Receipts"]]},
   {g:"Purchases", items:[["suppliers","Suppliers"],["bills","Supplier Bills"],["payments","Payments"]]},
   {g:"Banking & accounting", items:[["bank","Bank & Auto-allocate"],["accounts","Chart of Accounts"],["journals","Journals"],["projects","Projects"]]},
-  {g:"Stock", items:[["inventory","Stock / Inventory"],["kits","Kits (build & change kits)"],["transfer","Transfer stock between branches"]]},
+  {g:"Stock", items:[["inventory","Stock / Inventory"],["kits","Kits (build & change kits)"],["scan","Scan barcodes / QR codes with the camera"],["transfer","Transfer stock between branches"]]},
   {g:"Reports", items:[["dash","Dashboard"],["vat","VAT Report"],["reports","Financial Reports"],["audit","Audit Trail"]]},
   {g:"Special rights", items:[["seeCost","See cost prices, margins & profit"],["editPrices","Change selling prices / sell at any price level"],["delete","Delete records"],["setup","Setup (company details & price levels)"],["users","Manage users & access"]]}
 ];
 const ALL_PERMS=PERM_GROUPS.flatMap(g=>g.items.map(i=>i[0]));
 const PERM_PRESETS={
-  "Cashier":["pos","cashup","customers","receipts","inventory"],
-  "Sales":["dash","pos","cashup","documents","customers","receipts","inventory"],
+  "Cashier":["pos","cashup","customers","receipts","inventory","scan"],
+  "Sales":["dash","pos","cashup","documents","customers","receipts","inventory","scan"],
   "Bookkeeper":["dash","documents","customers","receipts","suppliers","bills","payments","bank","accounts","journals","projects","inventory","vat","reports","seeCost"],
   "Manager":ALL_PERMS.filter(k=>!k.startsWith("br_"))
 };
@@ -731,6 +791,7 @@ const NAV = [
   {id:"projects",ic:"📂",t:"Projects"},
   {id:"inventory",ic:"📦",t:"Stock / Inventory"},
   {id:"kits",ic:"🧰",t:"Kits"},
+  {id:"scan",ic:"📷",t:"Scan barcode / QR"},
   {grp:"Reports"},
   {id:"vat",ic:"％",t:"VAT Report"},
   {id:"reports",ic:"📈",t:"Financial Reports"},
@@ -790,6 +851,7 @@ const App = {
     ).join("");
   },
   go(r){
+    if(r!=="scan") Scanner.stop();
     this.route=r; location.hash=r;
     document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("on",a.dataset.r===r));
     const nav=NAV.find(n=>n.id===r);
@@ -818,7 +880,7 @@ const App = {
       return;
     }
     const fn = Views[this.route]||Views.dash;
-    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); if(this.route==="pos") Views._posFill(); if(this.route==="inventory") Views._invFill(); if(this.route==="kits") Views._kitFill(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
+    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); if(this.route==="pos") Views._posFill(); if(this.route==="inventory") Views._invFill(); if(this.route==="kits") Views._kitFill(); if(this.route==="scan") Views._scanAfter(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
   },
   quickAdd(){
     const map={documents:()=>Forms.document(),customers:()=>Forms.customer(),suppliers:()=>Forms.supplier(),
@@ -946,6 +1008,7 @@ const Views = {
         <div class="toolbar">
           <input class="search" id="posSearch" placeholder="Search or scan barcode / code…" value="${esc(App.posQ||"")}" autocomplete="off"
             oninput="App.posQ=this.value;Views._posFill()" onkeydown="if(event.key==='Enter'){event.preventDefault();App.posScan();}">
+          ${can("scan")?`<button class="btn" title="Scan with the camera" onclick="App.scanMode='till';App.go('scan');App.scanStart()">📷 Camera</button>`:""}
           <label style="margin:0">Sell at:</label>
           <select style="max-width:170px" onchange="App.posLevel=+this.value;App.render()" ${can("editPrices")?"":"disabled title='Only users with price rights can change the price level'"}>
             ${Pricing().labels.map((lb,l)=>`<option value="${l}" ${l===App.getPosLevel()?"selected":""}>${esc(lb)}</option>`).join("")}</select>
@@ -1185,6 +1248,73 @@ const Views = {
     ${items.length?`<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Description</th><th>Bin</th>${can("seeCost")?'<th class="r">Cost</th>':''}<th>Prices (excl VAT)</th>
       ${br.map(([k,v])=>`<th class="r" style="${sc===k?'color:var(--brand)':''}">${v}</th>`).join("")}<th class="r" style="${sc==='ALL'?'color:var(--brand)':''}">Total</th>${can("seeCost")?`<th class="r">Value (${sc==="ALL"?"combined":App.branches[sc]})</th>`:""}<th></th></tr></thead>
       <tbody id="iRows"></tbody></table></div>`:`<div class="empty">No stock items yet.</div>`}`+Views._transfers();
+  },
+  /* ---- Scan barcode / QR ---- */
+  scan(){
+    const m=App.scanMode||"lookup";
+    const cartN=App.cart.reduce((x,l)=>x+l.qty,0), cartT=money(App.cart.reduce((x,l)=>x+l.qty*l.price,0)*(1+VAT_RATE));
+    return `<div class="toolbar" style="flex-wrap:wrap">
+        <button class="btn ${m==="lookup"?"p":""}" onclick="App.scanMode='lookup';App.render()">🔎 Look up product</button>
+        ${can("pos")?`<button class="btn ${m==="till"?"p":""}" onclick="App.scanMode='till';App.render()">🛒 Add to till sale</button>`:""}
+        ${m==="till"&&can("pos")?`<span class="muted">Sale: <b>${cartN}</b> item${cartN===1?"":"s"} · ${fmt(cartT)} incl</span><button class="btn" onclick="App.go('pos')">Go to till →</button>`:""}
+      </div>
+      <div class="grid2" style="align-items:start">
+        <div class="card" style="padding:10px">
+          <div style="position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:4/3">
+            <video id="scanVideo" style="width:100%;height:100%;object-fit:cover;display:block" playsinline muted></video>
+            <div style="position:absolute;left:12%;right:12%;top:30%;bottom:30%;border:2px solid rgba(255,255,255,.85);border-radius:10px;pointer-events:none"></div>
+            <div id="scanIdle" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;text-align:center;padding:16px">
+              <button class="btn p" onclick="App.scanStart()">📷 Start camera</button></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn" id="scanStop" onclick="Scanner.stop();App.render()" style="display:none">■ Stop camera</button>
+            <button class="btn" id="scanTorch" onclick="Scanner.toggleTorch()" style="display:none">💡 Light</button>
+          </div>
+          <div class="f" style="margin-top:10px"><label>Or type / use a hand-held scanner, then Enter</label>
+            <input id="scanType" placeholder="code or barcode" onkeydown="if(event.key==='Enter'){App.scanCode(this.value);this.value='';}"></div>
+          <p class="muted" style="font-size:12px;margin:6px 0 0">Reads product barcodes (EAN, UPC, Code 128/39, ITF…) and QR codes. Hold the code inside the frame.</p>
+        </div>
+        <div>
+          <div id="scanResult">${App._scanRes||`<div class="empty">Scan a barcode or QR code — the product shows here.</div>`}</div>
+          ${(App.scanHist||[]).length?`<div class="card" style="margin-top:12px"><h3>Scanned this session</h3>
+            ${App.scanHist.map(h=>`<div style="padding:6px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="App.scanCode(${esc(JSON.stringify(h.code))},true)">
+              <code>${esc(h.code.length>40?h.code.slice(0,40)+"…":h.code)}</code> <span class="muted">${esc(h.label)}</span></div>`).join("")}</div>`:""}
+        </div>
+      </div>`;
+  },
+  _scanAfter(){
+    const on=!!Scanner.stream, v=document.getElementById("scanVideo");
+    if(on && v){ v.srcObject=Scanner.stream; v.play().catch(()=>{}); }
+    const show=(id,x)=>{ const e=document.getElementById(id); if(e) e.style.display=x?"":"none"; };
+    show("scanIdle",!on); show("scanStop",on); show("scanTorch",on&&Scanner.canTorch());
+  },
+  _scanCard(code){
+    const r=findItems(code,50), q=String(code).trim().toLowerCase();
+    const exact=r.list.filter(i=>codeMatch(i,q));
+    const url=/^https?:\/\/\S+$/i.test(code.trim());
+    const br=Object.entries(App.branches).filter(([k])=>can("br_"+k));
+    const head=`<div class="muted" style="font-size:12px;word-break:break-all">Scanned: <code>${esc(code)}</code></div>`;
+    if(exact.length===1){ const i=exact[0];
+      return {label:i.name, html:`<div class="card">${head}
+        <h2 style="margin:6px 0">${isKit(i)?'<span class="tag">KIT</span> ':''}${esc(i.name)}</h2>
+        <div class="muted" style="margin-bottom:8px">Code <b>${esc(i.code||"—")}</b>${i.barcode?` · Barcode ${esc(i.barcode)}`:""}${i.bin?` · Bin ${esc(i.bin)}`:""}${i.unit?` · ${esc(i.unit)}`:""}</div>
+        <div class="kpis" style="margin-bottom:10px">${br.map(([k,v])=>`<div class="kpi"><div class="l">${isKit(i)?"Can make":"On hand"} — ${v}</div><div class="v" style="${qtyOf(i,k)<0?'color:var(--bad)':''}">${qtyOf(i,k)}</div></div>`).join("")}</div>
+        ${can("seeCost")?`<div class="muted" style="margin-bottom:6px">Cost ${fmt(costOf(i))} excl</div>`:""}
+        ${Views._priceStack(i,App.getPosLevel(),can("pos")&&can("editPrices")?"App.cartAdd.bind(null,'"+i.id+"')":null)}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          ${can("pos")?`<button class="btn p" onclick="App.cartAdd('${i.id}');App.scanMode==='till'||toast('Added to the till sale');App.render()">🛒 Add to till sale</button>`:""}
+          ${isKit(i)?(can("kits")?`<button class="btn" onclick="Forms.kit('${i.id}')">Edit kit</button>`:""):(can("inventory")?`<button class="btn" onclick="Forms.item('${i.id}')">Edit product</button>`:"")}
+        </div></div>`};
+    }
+    if(exact.length>1) return {label:exact.length+" products", html:`<div class="card">${head}<h3>${exact.length} products share this code — pick one</h3>
+      ${exact.map(i=>`<div style="padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer" onclick="App._scanRes=Views._scanCard(${esc(JSON.stringify(i.code||code))}).html;App.render()"><b>${esc(i.code||"")}</b> ${esc(i.name)}</div>`).join("")}</div>`};
+    return {label:url?"link":"not found", html:`<div class="card">${head}
+      ${url?`<h3>QR code link</h3><p><a href="${esc(code.trim())}" target="_blank" rel="noopener noreferrer">${esc(code.trim())}</a></p>`:`<h3>No product has this code or barcode</h3>`}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${can("inventory")?`<button class="btn p" onclick="App.scanNewItem(${esc(JSON.stringify(code))})">+ New product with this barcode</button>
+        <button class="btn" onclick="App.scanLinkAsk(${esc(JSON.stringify(code))})">Link to an existing product</button>`:""}
+        <button class="btn" onclick="navigator.clipboard&&navigator.clipboard.writeText(${esc(JSON.stringify(code))}).then(()=>toast('Copied'))">Copy text</button>
+      </div></div>`};
   },
   kits(){
     const kits=sortedItems().filter(isKit);
@@ -2480,6 +2610,45 @@ App.cartAdd=function(itemId,level){ const it=Store.get("items",itemId); if(!it)r
   if(pr==null){ toast("No "+Pricing().labels[lv]+" price set for "+it.name); return; }
   const ex=App.cart.find(l=>l.itemId===itemId&&(l.level||0)===lv);
   if(ex)ex.qty++; else App.cart.push({itemId,name:it.name,price:pr,level:lv,qty:1}); App.render(); };
+App.scanStart=async function(){
+  const v=document.getElementById("scanVideo"); if(!v) return;
+  try{ await Scanner.start(v,code=>App.scanCode(code)); }
+  catch(e){ Scanner.stop(); const m=String(e&&e.name||"")==="NotAllowedError"?"camera permission was refused — allow the camera for this app in the phone settings":(e&&e.message)||e;
+    toast("Camera: "+m); }
+  Views._scanAfter();
+};
+App.scanCode=function(code,fromHist){
+  code=String(code||"").trim(); if(!code) return;
+  const c=Views._scanCard(code);
+  if(App.scanMode==="till" && can("pos") && !fromHist){
+    const r=findItems(code,50), q=code.toLowerCase(), ex=r.list.filter(i=>codeMatch(i,q));
+    if(ex.length===1){ const before=App.cart.length+":"+App.cart.reduce((x,l)=>x+l.qty,0);
+      App.cartAdd(ex[0].id); if(before!==App.cart.length+":"+App.cart.reduce((x,l)=>x+l.qty,0)) toast("Added: "+ex[0].name); }
+  }
+  App._scanRes=c.html;
+  if(!fromHist){ App.scanHist=[{code,label:c.label},...(App.scanHist||[]).filter(h=>h.code!==code)].slice(0,10); }
+  if(App.route==="scan") App.render();
+};
+App.scanNewItem=function(code){ Forms.item(); const b=document.getElementById("i_barcode"), c=document.getElementById("i_code");
+  if(b) b.value=code; if(c && !c.value) c.value=code; };
+App.scanLinkAsk=function(code){
+  App._linkCode=code;
+  modal(`<span class="close" onclick="closeModal()">✕</span><h2>Link barcode to a product</h2>
+    <p class="muted">Barcode <code>${esc(code)}</code> will be saved on the product you pick, so it scans next time.</p>
+    <input class="search" id="lk_q" placeholder="Search code or description…" oninput="App.scanLinkFind(this.value)" autofocus>
+    <div id="lk_hits" style="margin-top:8px"></div>`);
+};
+App.scanLinkFind=function(q){
+  const box=document.getElementById("lk_hits"); if(!box) return;
+  const r=String(q||"").trim()?findItems(q,12).list.filter(i=>!isKit(i)):[];
+  box.innerHTML=r.map(i=>`<div style="padding:8px;border-bottom:1px solid var(--line);cursor:pointer" onclick="App.scanLink('${i.id}')"><b>${esc(i.code||"")}</b> ${esc(i.name)}${i.barcode?` <span class="muted">(now: ${esc(i.barcode)})</span>`:""}</div>`).join("");
+};
+App.scanLink=async function(id){
+  const it=Store.get("items",id), code=App._linkCode; if(!it||!code) return;
+  if(it.barcode && it.barcode!==code && !confirm(it.name+" already has barcode "+it.barcode+". Replace it with "+code+"?")) return;
+  await Store.put("items",{...it,barcode:code});
+  closeModal(); toast("Barcode saved on "+it.name); App.scanCode(code,true);
+};
 App.cartQty=function(i,v){ App.cart[i].qty=Math.max(1,+v||1); App.render(); };
 App.cartDel=function(i){ App.cart.splice(i,1); App.render(); };
 
