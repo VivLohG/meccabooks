@@ -62,7 +62,7 @@
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
   th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0}
-  td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+  td.r,th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   tr:hover td{background:var(--panel2)}
   .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
   .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600}
@@ -181,7 +181,7 @@ const AUDIT_SKIP = new Set(["counters","audit","people"]);
 
 /* ---------- money helpers ---------- */
 const money = n => (Math.round((+n||0)*100)/100);
-const fmt = n => (money(n)<0?"-":"") + "R " + Math.abs(money(n)).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt = n => (money(n)<0?"-":"") + "R\u00a0" + Math.abs(money(n)).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtn = n => money(n).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const today = () => new Date().toISOString().slice(0,10);
@@ -2274,7 +2274,7 @@ const Actions = {
   printDoc(id){
     const d=Store.get("documents",id); const c=Company(recBranch(d)); const cust=Store.get("customers",d.customerId)||{};
     const w=window.open("","_blank");
-    const rows=(d.lines||[]).map(l=>`<tr><td>${esc(l.desc||"")}</td><td style="text-align:center">${l.qty||0}</td><td style="text-align:right">R ${fmtn(l.price||0)}</td><td style="text-align:right">R ${fmtn((l.qty||0)*(l.price||0))}</td></tr>`).join("");
+    const rows=(d.lines||[]).map(l=>`<tr><td>${esc(l.desc||"")}</td><td style="text-align:center">${l.qty||0}</td><td style="text-align:right">R&nbsp;${fmtn(l.price||0)}</td><td style="text-align:right">R&nbsp;${fmtn((l.qty||0)*(l.price||0))}</td></tr>`).join("");
     const html=`<html><head><title>${esc(d.no)}</title><style>
       body{font-family:Arial;color:#222;padding:30px;font-size:13px}
       .hd{display:flex;justify-content:space-between;border-bottom:3px solid #f5a623;padding-bottom:12px}
@@ -2290,9 +2290,9 @@ const Actions = {
     <div style="text-align:right"><h1>${d.type==='invoice'?'Tax Invoice':'Quotation'}</h1>No: <b>${esc(d.no)}</b><br>Date: ${esc(d.date)}</div></div>
     <div class="box"><b>To:</b> ${esc(cust.name||'')}<br>${esc(cust.addr||'')}<br>${esc(cust.phone||'')} ${cust.vat?' · VAT '+esc(cust.vat):''}</div>
     <table><thead><tr><th>Description</th><th style="width:60px;text-align:center">Qty</th><th style="width:100px;text-align:right">Unit Price</th><th style="width:110px;text-align:right">Nett Price</th></tr></thead><tbody>${rows}</tbody></table>
-    <table class="tot"><tr><td>Subtotal</td><td style="text-align:right">R ${fmtn(d.sub)}</td></tr>
-      <tr><td>VAT 15%</td><td style="text-align:right">R ${fmtn(d.vat)}</td></tr>
-      <tr><td><b>TOTAL</b></td><td style="text-align:right"><b>R ${fmtn(d.total)}</b></td></tr></table>
+    <table class="tot"><tr><td>Subtotal</td><td style="text-align:right">R&nbsp;${fmtn(d.sub)}</td></tr>
+      <tr><td>VAT 15%</td><td style="text-align:right">R&nbsp;${fmtn(d.vat)}</td></tr>
+      <tr><td><b>TOTAL</b></td><td style="text-align:right"><b>R&nbsp;${fmtn(d.total)}</b></td></tr></table>
     <div class="box" style="margin-top:20px">${esc(c.bank||'Banking details on request.')}<br><br>
     Goods remain property of ${esc(c.name||'the company')} until paid in full. Returns accepted within 7 days. E&OE.</div>
     <script>window.print()<\/script></body></html>`;
