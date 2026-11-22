@@ -253,7 +253,7 @@ const Store = {
       if(!data || data.length<1000) break;
     }
     for(const c of Object.keys(fresh)){
-      this.data[c]=fresh[c]; this._snap[c]={};
+      this.data[c]=fresh[c]; this._snap[c]={}; if(c==="items") this._iv=(this._iv||0)+1;
       Object.entries(fresh[c]).forEach(([id,v])=>this._keep(c,id,v)); this._loaded.add(c);
     }
     setStatus(true,"Live · synced");
@@ -265,7 +265,7 @@ const Store = {
     this.chan = sb.channel("meccabooks-live")
       .on("postgres_changes",{event:"*",schema:"public",table:"docs"}, p=>{
         if(p.eventType==="DELETE"){ const o=p.old||{}; if(o.coll && this.data[o.coll]){ delete this.data[o.coll][o.id]; this._keep(o.coll,o.id,null); } }
-        else { const r=p.new; if(!r||!r.coll) return; const o=this._row2obj(r);
+        else { const r=p.new; if(!r||!r.coll) return; const o=this._row2obj(r); if(r.coll==="items") this._iv=(this._iv||0)+1;
                (this.data[r.coll]=this.data[r.coll]||{})[r.id]=o; this._keep(r.coll,r.id,o); }
         this._emitSoon();
       })
@@ -299,7 +299,7 @@ const Store = {
     const branch = shared ? null : obj.branch;
     obj._by=this.uid; obj._at=Date.now();
     if(!existed){ obj._createdBy=this.uid; obj._createdAt=obj._at; }
-    this.data[coll][obj.id]=obj; this._emit();                 // show it straight away
+    this.data[coll][obj.id]=obj; if(coll==="items") this._iv=(this._iv||0)+1; this._emit();   // show it straight away
     const sb=this.client(), data=this._clean(obj);
     const res = existed
       ? await sb.from("docs").update({branch,data}).match({coll,id:obj.id}).select("id")
@@ -469,12 +469,19 @@ const DEF_LABELS=["Trade","Special","Retail","Self label 1","Self label 2","Self
 const DEF_PCTS=[20,35,40,null,null,null];
 function Pricing(){ const s=Store.get("settings","pricing")||{};
   return {labels:(s.labels&&s.labels.length===6)?s.labels:DEF_LABELS, pcts:(s.pcts&&s.pcts.length===6)?s.pcts:DEF_PCTS,
-          basis:s.basis||"margin", posLevel:s.posLevel!=null?+s.posLevel:0, custLevel:s.custLevel!=null?+s.custLevel:0}; }
+          basis:s.basis||"margin", posLevel:s.posLevel!=null?+s.posLevel:0, custLevel:s.custLevel!=null?+s.custLevel:0,
+          round:s.round!=null?+s.round:0}; }
 const isNum = v => v!==null && v!=="" && v!==undefined && !isNaN(+v);
-function priceFrom(cost,pct,basis){
+function priceFrom(cost,pct,basis,round){
   if(!isNum(pct)) return null; cost=+cost||0; pct=+pct;
-  if((basis||Pricing().basis)==="margin"){ if(pct>=100) return null; return money(cost/(1-pct/100)); }
-  return money(cost*(1+pct/100));
+  let p;
+  if((basis||Pricing().basis)==="margin"){ if(pct>=100) return null; p=cost/(1-pct/100); }
+  else p=cost*(1+pct/100);
+  const r = round!=null ? +round : Pricing().round;     // round the VAT-inclusive price UP to the nearest R r
+  if(r>0 && p>0){                                        // same rule as the Pastel price list: VAT-incl to the cent, then UP to R r
+    const inc=Math.round(p*(1+VAT_RATE)*100)/100;
+    return Math.round(Math.ceil(inc/r - 1e-9)*r/(1+VAT_RATE)*10000)/10000; }
+  return money(p);
 }
 function pctFrom(cost,price,basis){
   cost=+cost||0; price=+price||0; if(!cost||!price) return null;
@@ -490,6 +497,26 @@ function repriceItem(it){
   pc.forEach((x,l)=>{ const v=priceFrom(it.cost,x,b); if(v!=null) pr[l]=v; });
   it.pcts=pc; it.prices=pr; it.price=pr[0]; delete it.markup;
   return it;
+}
+
+/* ---- product search (thousands of products: never draw them all at once) ---- */
+function sortedItems(){
+  const n=Object.keys(Store.data.items||{}).length;
+  if(!sortedItems._c || sortedItems._n!==n || sortedItems._v!==Store._iv){
+    sortedItems._c=Store.all("items").sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+    sortedItems._n=n; sortedItems._v=Store._iv;
+  }
+  return sortedItems._c;
+}
+function findItems(q,limit){
+  q=String(q||"").trim().toLowerCase();
+  const all=sortedItems();
+  if(!q) return {list:all.slice(0,limit),total:all.length};
+  const exact=all.filter(i=>(i.code||"").toLowerCase()===q||(i.barcode||"").toLowerCase()===q);
+  const words=q.split(/\s+/);
+  const hits=all.filter(i=>{ const h=((i.name||"")+" "+(i.code||"")+" "+(i.barcode||"")).toLowerCase(); return words.every(w=>h.includes(w)); });
+  const list=[...exact,...hits.filter(i=>!exact.includes(i))];
+  return {list:list.slice(0,limit),total:list.length,exact:exact.length===1?exact[0]:null};
 }
 
 /* ---- scope = what lists/reports show: a branch, or "ALL" (combined) ---- */
@@ -575,7 +602,15 @@ const App = {
   async start(){
     await Store.start();
     if(!Store.profile || !Store.profile.active){ Auth.blocked(); return false; }
-    Store.onChange(()=>this.render());
+    Store.onChange(()=>{
+      const a=document.activeElement, v=document.getElementById("view");
+      if(a && v && v.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)){ this._pendingRender=true; return; }
+      this.render();
+    });
+    document.getElementById("view").addEventListener("focusout",()=>{ setTimeout(()=>{
+      const a=document.activeElement, v=document.getElementById("view");
+      if(this._pendingRender && !(a && v && v.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))){ this._pendingRender=false; this.render(); }
+    },50); });
     this.renderNav();
     // branch selector
     const bs=document.getElementById("branchSel");
@@ -638,7 +673,7 @@ const App = {
       return;
     }
     const fn = Views[this.route]||Views.dash;
-    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
+    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); if(this.route==="pos") Views._posFill(); if(this.route==="inventory") Views._invFill(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
   },
   quickAdd(){
     const map={documents:()=>Forms.document(),customers:()=>Forms.customer(),suppliers:()=>Forms.supplier(),
@@ -757,7 +792,6 @@ const Views = {
 
   /* ---- POS ---- */
   pos(){
-    const items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
     const cart=App.cart;
     const sub=money(cart.reduce((s,l)=>s+l.qty*l.price,0));
     const vat=money(sub*VAT_RATE), tot=money(sub+vat);
@@ -765,20 +799,16 @@ const Views = {
     <div class="posgrid">
       <div>
         <div class="toolbar">
-          <input class="search" placeholder="Search products…" oninput="Views._posFilter(this.value)">
+          <input class="search" id="posSearch" placeholder="Search or scan barcode / code…" value="${esc(App.posQ||"")}" autocomplete="off"
+            oninput="App.posQ=this.value;Views._posFill()" onkeydown="if(event.key==='Enter'){event.preventDefault();App.posScan();}">
           <label style="margin:0">Sell at:</label>
           <select style="max-width:170px" onchange="App.posLevel=+this.value;App.render()" ${can("editPrices")?"":"disabled title='Only users with price rights can change the price level'"}>
             ${Pricing().labels.map((lb,l)=>`<option value="${l}" ${l===App.getPosLevel()?"selected":""}>${esc(lb)}</option>`).join("")}</select>
           <span class="muted">Till: ${App.branches[App.branch]}</span>
         </div>
         <div class="muted" style="font-size:12px;margin:-6px 0 10px">Tap a product to sell at <b>${esc(Pricing().labels[App.getPosLevel()])}</b>, or tap any price line to sell at that price.</div>
-        <div class="prodgrid" id="posProducts">
-          ${items.length?items.map(i=>`<div class="prod" role="button" data-name="${esc((i.name+" "+(i.code||"")).toLowerCase())}" onclick="App.cartAdd('${i.id}')">
-            <div class="n">${esc(i.name)}</div>
-            <div class="s">${esc(i.code||"")} · ${qtyOf(i)} on hand</div>
-            ${Views._priceStack(i,App.getPosLevel(),can("editPrices")?"App.cartAdd.bind(null,'"+i.id+"')":null)}</div>`).join("")
-            :`<div class="empty">No stock items. Add them under Stock / Inventory.</div>`}
-        </div>
+        <div class="muted" id="posCount" style="font-size:12px;margin:-4px 0 8px"></div>
+        <div class="prodgrid" id="posProducts">${Views._posTiles()}</div>
       </div>
       <div>
         <div class="cart">
@@ -803,7 +833,19 @@ const Views = {
       </div>
     </div>`;
   },
-  _posFilter(q){ q=q.toLowerCase(); document.querySelectorAll("#posProducts .prod").forEach(p=>{ p.style.display=p.dataset.name.includes(q)?"":"none"; }); },
+  _posTiles(){
+    const r=findItems(App.posQ,60);
+    Views._posCountText = r.total ? (r.total>r.list.length?`Showing ${r.list.length} of ${r.total} — type more to narrow down`:`${r.total} product${r.total>1?"s":""}`) : "";
+    if(!r.total) return `<div class="empty">${sortedItems().length?"No product matches — check the spelling or code.":"No stock items. Add them under Stock / Inventory."}</div>`;
+    return r.list.map(i=>`<div class="prod" role="button" onclick="App.cartAdd('${i.id}')">
+      <div class="n">${esc(i.name)}</div>
+      <div class="s">${esc(i.code||"")} · ${qtyOf(i)} on hand</div>
+      ${Views._priceStack(i,App.getPosLevel(),can("editPrices")?"App.cartAdd.bind(null,'"+i.id+"')":null)}</div>`).join("");
+  },
+  _posFill(){
+    const g=document.getElementById("posProducts"); if(g) g.innerHTML=Views._posTiles();
+    const c=document.getElementById("posCount"); if(c) c.textContent=Views._posCountText||"";
+  },
 
   /* ---- Cash-up ---- */
   cashup(){
@@ -981,28 +1023,36 @@ const Views = {
 
   /* ---- Inventory ---- */
   inventory(){
-    const items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
+    const items=sortedItems();
     const br=Object.entries(App.branches).filter(([k])=>can("br_"+k));
     const sc=scope();
-    const valOf=i=>money(qtyOf(i,sc)*(+i.cost||0));
-    const totVal=money(items.reduce((x,i)=>x+valOf(i),0));
-    return Views._scopeSel()+`<div class="banner">Every item carries 6 prices (excl VAT), worked out from cost by ${Pricing().basis==="margin"?"margin":"markup"}: ${Pricing().labels.map((lb,l)=>`${esc(lb)} ${isNum(Pricing().pcts[l])?Pricing().pcts[l]+"%":"—"}`).join(" · ")}. Change the defaults under Setup. Each branch keeps its own stock count.</div>
+    const P=Pricing();
+    const totVal=k=>money(items.reduce((x,i)=>x+qtyOf(i,k)*(+i.cost||0),0));
+    return Views._scopeSel()+`<div class="banner">${items.length} products. Every item carries 6 prices (excl VAT), worked out from cost by ${P.basis==="margin"?"margin":"markup"}: ${P.labels.map((lb,l)=>`${esc(lb)} ${isNum(P.pcts[l])?P.pcts[l]+"%":"—"}`).join(" · ")}${P.round>0?` · VAT-inclusive prices rounded up to R${P.round}`:""}. Change the defaults under Setup. Each branch keeps its own stock count.</div>
     <div class="kpis" style="margin-bottom:14px">
-      ${!can("seeCost")?"":br.filter(([k])=>can("br_"+k)).map(([k,v])=>`<div class="kpi"><div class="l">Stock value — ${v}</div><div class="v">${fmt(items.reduce((x,i)=>x+qtyOf(i,k)*(+i.cost||0),0))}</div></div>`).join("")}
-      ${can("seeCost")&&allowedBranches().length>1?`<div class="kpi"><div class="l">Stock value — combined</div><div class="v">${fmt(items.reduce((x,i)=>x+qtyOf(i,"ALL")*(+i.cost||0),0))}</div></div>`:""}
+      ${!can("seeCost")?"":br.map(([k,v])=>`<div class="kpi"><div class="l">Stock value — ${v}</div><div class="v">${fmt(totVal(k))}</div></div>`).join("")}
+      ${can("seeCost")&&allowedBranches().length>1?`<div class="kpi"><div class="l">Stock value — combined</div><div class="v">${fmt(totVal("ALL"))}</div></div>`:""}
     </div>
     <div class="toolbar"><button class="btn p" onclick="Forms.item()">+ New stock item</button>
       ${can("transfer")?`<button class="btn" onclick="Forms.transfer()">⇄ Transfer between branches</button>`:""}
-      <input class="search" placeholder="Search…" oninput="Views._tblFilter(this,'iRows')"></div>
-    ${items.length?`<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Description</th>${can("seeCost")?'<th class="r">Cost</th>':''}<th>Prices (excl VAT)</th>
-      ${br.map(([k,v])=>`<th class="r" style="${sc===k?'color:var(--brand)':''}">${v}</th>`).join("")}<th class="r" style="${sc==='ALL'?'color:var(--brand)':''}">Total</th>${can("seeCost")?`<th class="r">Value (${sc==="ALL"?"combined":App.branches[sc]})</th>`:""}<th></th></tr></thead><tbody id="iRows">
-    ${items.map(i=>`<tr data-s="${esc((i.name+(i.code||"")).toLowerCase())}"><td>${esc(i.code||"")}</td><td>${esc(i.name)}</td>
-      ${can("seeCost")?`<td class="r">${fmt(i.cost)}</td>`:""}<td>${Views._priceStack(i)}</td>
+      <input class="search" style="max-width:320px" placeholder="Search code, description or barcode…" value="${esc(App.invQ||"")}" oninput="App.invQ=this.value;Views._invFill()">
+      <span class="muted" id="invCount" style="font-size:12px"></span></div>
+    ${items.length?`<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Description</th><th>Bin</th>${can("seeCost")?'<th class="r">Cost</th>':''}<th>Prices (excl VAT)</th>
+      ${br.map(([k,v])=>`<th class="r" style="${sc===k?'color:var(--brand)':''}">${v}</th>`).join("")}<th class="r" style="${sc==='ALL'?'color:var(--brand)':''}">Total</th>${can("seeCost")?`<th class="r">Value (${sc==="ALL"?"combined":App.branches[sc]})</th>`:""}<th></th></tr></thead>
+      <tbody id="iRows"></tbody></table></div>`:`<div class="empty">No stock items yet.</div>`}`+Views._transfers();
+  },
+  _invFill(){
+    const tb=document.getElementById("iRows"); if(!tb) return;
+    const br=Object.entries(App.branches).filter(([k])=>can("br_"+k)), sc=scope();
+    const r=findItems(App.invQ,200);
+    tb.innerHTML=r.list.map(i=>`<tr><td>${esc(i.code||"")}</td><td>${esc(i.name)}${i.unit?` <span class="muted" style="font-size:11px">(${esc(i.unit)})</span>`:""}</td><td class="muted">${esc(i.bin||"")}</td>
+      ${can("seeCost")?`<td class="r">${i.cost?fmt(i.cost):'<span class="muted">—</span>'}</td>`:""}<td>${Views._priceStack(i)}</td>
       ${br.map(([k])=>{const q=qtyOf(i,k);return `<td class="r" style="${q<0?'color:var(--bad)':''}">${q}</td>`;}).join("")}
-      <td class="r"><b>${br.reduce((x,[k])=>x+qtyOf(i,k),0)}</b></td>${can("seeCost")?`<td class="r">${fmt(valOf(i))}</td>`:""}
-      <td class="r"><button class="btn sm" onclick="Forms.item('${i.id}')">Edit</button></td></tr>`).join("")}
-      ${can("seeCost")?`<tr style="font-weight:700"><td></td><td>Total</td><td colspan="${2+br.length+1}"></td><td class="r">${fmt(totVal)}</td><td></td></tr>`:""}
-    </tbody></table></div>`:`<div class="empty">No stock items yet.</div>`}`+Views._transfers();
+      <td class="r"><b>${br.reduce((x,[k])=>x+qtyOf(i,k),0)}</b></td>${can("seeCost")?`<td class="r">${fmt(money(qtyOf(i,sc)*(+i.cost||0)))}</td>`:""}
+      <td class="r"><button class="btn sm" onclick="Forms.item('${i.id}')">Edit</button></td></tr>`).join("")
+      || `<tr><td colspan="9" class="muted" style="padding:20px;text-align:center">No product matches.</td></tr>`;
+    const c=document.getElementById("invCount");
+    if(c) c.textContent = r.total>r.list.length ? `Showing ${r.list.length} of ${r.total} — search to narrow down` : `${r.total} shown`;
   },
   _transfers(){
     const sc=scope();
@@ -1144,12 +1194,14 @@ const Views = {
         <select id="pp_basis" onchange="Views._ppExample()">
           <option value="margin" ${P.basis==="margin"?"selected":""}>Margin — % of the selling price (cost ÷ (1 − %))</option>
           <option value="markup" ${P.basis==="markup"?"selected":""}>Markup — % added to cost (cost × (1 + %))</option></select></div>
-      <table class="linetbl" style="max-width:620px"><thead><tr><th>#</th><th>Name</th><th style="width:110px">Default %</th><th class="r" style="width:150px">R100 cost sells at</th></tr></thead><tbody>
+      <table class="linetbl" style="max-width:620px"><thead><tr><th>#</th><th>Name</th><th style="width:110px">Default %</th><th class="r" style="width:150px">R100 cost sells at (incl VAT)</th></tr></thead><tbody>
       ${P.labels.map((lb,l)=>`<tr><td class="muted">${l+1}</td>
         <td><input id="pp_lbl_${l}" value="${esc(lb)}"></td>
         <td><input id="pp_pct_${l}" type="number" step="0.01" value="${isNum(P.pcts[l])?P.pcts[l]:""}" placeholder="not set" oninput="Views._ppExample()"></td>
         <td class="r" id="pp_ex_${l}"></td></tr>`).join("")}
       </tbody></table>
+      <div class="f" style="max-width:420px;margin-top:12px"><label>Round VAT-inclusive prices UP to the nearest R (0 = no rounding)</label>
+        <input id="pp_round" type="number" min="0" step="1" value="${P.round||0}" oninput="Views._ppExample()"></div>
       <div class="grid2" style="max-width:620px;margin-top:12px">
         <div class="f"><label>Till (POS) sells at</label><select id="pp_pos">${P.labels.map((lb,l)=>`<option value="${l}" ${l===P.posLevel?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>
         <div class="f"><label>New customers default to</label><select id="pp_cust">${P.labels.map((lb,l)=>`<option value="${l}" ${l===P.custLevel?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>
@@ -1162,9 +1214,9 @@ const Views = {
     </div>`;
   },
   _ppExample(){
-    const b=document.getElementById("pp_basis").value;
-    for(let l=0;l<6;l++){ const v=document.getElementById("pp_pct_"+l).value; const pr=v!==""?priceFrom(100,+v,b):null;
-      document.getElementById("pp_ex_"+l).textContent = pr!=null ? fmt(pr)+" excl" : "—"; }
+    const b=document.getElementById("pp_basis").value, rd=+(document.getElementById("pp_round")||{}).value||0;
+    for(let l=0;l<6;l++){ const v=document.getElementById("pp_pct_"+l).value; const pr=v!==""?priceFrom(100,+v,b,rd):null;
+      document.getElementById("pp_ex_"+l).textContent = pr!=null ? fmt(pr*(1+VAT_RATE))+" incl" : "—"; }
   },
   setup(){
     const c=Company();
@@ -1243,6 +1295,8 @@ const Forms = {
         ${can("seeCost")?`<div class="f"><label>Cost price (excl VAT)</label><input id="i_cost" type="number" step="0.01" value="${i.cost||0}" oninput="Forms._recalcItem()"></div>`:""}
         ${Object.entries(App.branches).filter(([k])=>can("br_"+k)).map(([k,v])=>`<div class="f"><label>On hand — ${v}</label><input id="i_qty_${k}" type="number" value="${qtyOf(i,k)}"></div>`).join("")}
         <div class="f"><label>Bin / location</label><input id="i_bin" value="${esc(i.bin||'')}"></div>
+        <div class="f"><label>Unit</label><input id="i_unit" value="${esc(i.unit||'')}" placeholder="e.g. ea, mtr, roll"></div>
+        <div class="f"><label>Barcode</label><input id="i_barcode" value="${esc(i.barcode||'')}" placeholder="scan or type"></div>
       </div>
       <h3 style="margin:6px 0 8px;font-size:13px;color:var(--muted)">SELLING PRICES${can("seeCost")?` · % is ${P.basis==="margin"?"margin on selling price":"markup on cost"}`:""}${can("editPrices")?"":" · 🔒 read-only for you"}</h3>
       <table class="linetbl"><thead><tr><th>Price level</th>${can("seeCost")?`<th style="width:90px">${P.basis==="margin"?"Margin":"Markup"} %</th>`:""}<th style="width:120px">Excl VAT</th><th class="r" style="width:110px">Incl VAT</th></tr></thead><tbody>
@@ -1711,7 +1765,7 @@ const Actions = {
     const labels=[],pcts=[];
     for(let l=0;l<6;l++){ labels.push(g("pp_lbl_"+l).trim()||DEF_LABELS[l]); const v=g("pp_pct_"+l); pcts.push(v!==""?+v:null); }
     if(g("pp_basis")==="margin" && pcts.some(x=>isNum(x)&&x>=100)){ toast("A margin must be below 100%"); return; }
-    await Store.put("settings",{id:"pricing",labels,pcts,basis:g("pp_basis"),posLevel:+g("pp_pos"),custLevel:+g("pp_cust")});
+    await Store.put("settings",{id:"pricing",labels,pcts,basis:g("pp_basis"),posLevel:+g("pp_pos"),custLevel:+g("pp_cust"),round:Math.max(0,+g("pp_round")||0)});
     App.posLevel=null; toast("Price levels saved");
   },
   repriceAsk(){
@@ -1789,7 +1843,7 @@ const Actions = {
         else pcts.push(pr!==""?pctFrom(cost,+pr):null);   // no cost rights: keep % in step with the price typed
       }
     }
-    const rec={...old,id:id||undefined,code:g("i_code"),name:g("i_name"),cost,pcts,prices,price:prices[0],stock,bin:g("i_bin")};
+    const rec={...old,id:id||undefined,code:g("i_code"),name:g("i_name"),cost,pcts,prices,price:prices[0],stock,bin:g("i_bin"),unit:g("i_unit"),barcode:g("i_barcode")};
     if(!id && !can("editPrices")) repriceItem(rec);   // new item by someone who can't set prices: use default %
     delete rec.markup; delete rec.qty;
     await Store.put("items",rec);
@@ -2120,6 +2174,14 @@ const Actions = {
 };
 
 /* ---- cart helpers ---- */
+// Enter in the till search (or a barcode scanner, which types the code then Enter): add an exact code/barcode match
+App.posScan=function(){
+  const r=findItems(App.posQ,2);
+  const it = r.exact || (r.total===1 ? r.list[0] : null);
+  if(!it){ toast(r.total?"Several products match — tap the right one":"No product with that code or barcode"); return; }
+  App.cartAdd(it.id); App.posQ="";
+  setTimeout(()=>{ const s=document.getElementById("posSearch"); if(s){ s.value=""; s.focus(); } Views._posFill(); },0);
+};
 App.getPosLevel=function(){ return (App.posLevel!=null && can("editPrices")) ? App.posLevel : Pricing().posLevel; };
 App.cartAdd=function(itemId,level){ const it=Store.get("items",itemId); if(!it)return;
   const lv=(level!=null&&can("editPrices")?level:App.getPosLevel()), pr=priceOf(it,lv);
