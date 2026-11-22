@@ -1,0 +1,6 @@
+{
+  "appId": "za.co.secmec.meccabooks",
+  "appName": "Mecca Books",
+  "webDir": "www",
+  "android": { "allowMixedContent": false }
+}

@@ -1,0 +1,2238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mecca Books — The Security Mecca Accounting</title>
+<meta name="theme-color" content="#0f1720">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root{
+    --bg:#0f1720; --panel:#17212b; --panel2:#1e2a37; --line:#2a3a4a;
+    --txt:#e8eef4; --muted:#8aa0b4; --brand:#f5a623;
+    --accent:#2d8cff; --good:#36c08a; --bad:#ff5d6c; --warn:#f5a623;
+    --chip:#223240;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  button{font-family:inherit}
+  a{color:var(--accent)}
+  .app{display:flex;min-height:100vh}
+  /* Sidebar */
+  .side{width:230px;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:40;transition:transform .2s}
+  .brand{padding:16px 16px 12px;border-bottom:1px solid var(--line)}
+  .brand b{color:var(--brand);font-size:17px;letter-spacing:.3px}
+  .brand small{display:block;color:var(--muted);margin-top:2px;font-size:11px}
+  .branchsel{margin:10px 12px;display:flex;gap:6px}
+  .branchsel select{flex:1;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 8px}
+  .nav{flex:1;overflow:auto;padding:6px 8px}
+  .nav .grp{color:var(--muted);text-transform:uppercase;font-size:10px;letter-spacing:.8px;padding:12px 10px 4px}
+  .nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--txt);text-decoration:none;cursor:pointer;font-size:13.5px}
+  .nav a .ic{width:18px;text-align:center;opacity:.9}
+  .nav a:hover{background:var(--panel2)}
+  .nav a.on{background:var(--chip);color:#fff}
+  .whoami{padding:10px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:11.5px}
+  .whoami b{color:var(--txt)}
+  /* Main */
+  .main{flex:1;margin-left:230px;min-width:0}
+  .top{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(15,23,32,.9);backdrop-filter:blur(6px);z-index:30}
+  .top h1{font-size:17px;margin:0;font-weight:600}
+  .top .sp{flex:1}
+  .burger{display:none;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 10px;cursor:pointer}
+  .content{padding:18px 22px 60px;max-width:1200px}
+  /* bits */
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:8px 13px;border-radius:8px;cursor:pointer;font-size:13px}
+  .btn:hover{border-color:#3a4d60}
+  .btn.p{background:var(--brand);border-color:var(--brand);color:#1a1207;font-weight:600}
+  .btn.p:hover{filter:brightness(1.05)}
+  .btn.g{background:var(--good);border-color:var(--good);color:#06281c;font-weight:600}
+  .btn.d{background:transparent;border-color:var(--bad);color:var(--bad)}
+  .btn.sm{padding:5px 9px;font-size:12px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+  .card h3{margin:0 0 12px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .kpi .l{color:var(--muted);font-size:12px}
+  .kpi .v{font-size:23px;font-weight:700;margin-top:4px}
+  .kpi .v.good{color:var(--good)} .kpi .v.bad{color:var(--bad)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0}
+  td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+  tr:hover td{background:var(--panel2)}
+  .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600}
+  .pill.q{background:#30425a;color:#aecbf0}
+  .pill.inv{background:#2a4a3a;color:#8fe3bd}
+  .pill.paid{background:#2a4a3a;color:#8fe3bd}
+  .pill.due{background:#4a3a2a;color:#f0cfa0}
+  .pill.over{background:#4a2a2a;color:#f0a0a0}
+  input,select,textarea{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:inherit;width:100%}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 5px}
+  .f{margin-bottom:12px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .muted{color:var(--muted)}
+  .right{text-align:right}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .search{max-width:260px}
+  /* Modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:60;overflow:auto}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:100%;max-width:720px;padding:20px}
+  .modal.wide{max-width:960px}
+  .modal h2{margin:0 0 16px;font-size:18px}
+  .modal .close{float:right;cursor:pointer;color:var(--muted);font-size:20px;line-height:1}
+  .linetbl td{padding:5px 6px;border-bottom:1px solid var(--line)}
+  .linetbl input,.linetbl select{padding:6px 7px}
+  .totbox{margin-top:12px;margin-left:auto;max-width:300px}
+  .totbox .tr{display:flex;justify-content:space-between;padding:4px 0}
+  .totbox .tr.g{border-top:1px solid var(--line);margin-top:6px;padding-top:8px;font-weight:700;font-size:16px}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  .banner{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px}
+  .status{position:fixed;bottom:14px;right:14px;background:var(--panel2);border:1px solid var(--line);padding:8px 13px;border-radius:999px;font-size:12px;z-index:50;display:flex;align-items:center;gap:8px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+  .dot.on{background:var(--good)} .dot.off{background:var(--bad)}
+  .toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:#0b1118;border:1px solid var(--line);padding:11px 18px;border-radius:10px;z-index:80;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  #authScreen{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+  .authbox{width:100%;max-width:380px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px}
+  .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .tabs .t{padding:7px 13px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;font-size:13px}
+  .tabs .t.on{background:var(--chip);color:#fff;border-color:#3a4d60}
+  .posgrid{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+  .prodgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+  .prod{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px;cursor:pointer;text-align:left}
+  .prod:hover{border-color:var(--brand)}
+  .prod .n{font-size:12.5px;font-weight:600;min-height:34px}
+  .prod .p{color:var(--brand);font-weight:700;margin-top:6px}
+  .pstack{margin-top:6px;display:flex;flex-direction:column;gap:2px;min-width:150px}
+  .pstack .pl{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;padding:2px 5px;border-radius:5px;color:var(--muted);cursor:pointer}
+  .pstack .pl b{color:var(--txt);font-variant-numeric:tabular-nums}
+  .pstack .pl.on{background:var(--chip);color:#fff}
+  .pstack .pl.on b{color:var(--brand)}
+  .pstack .pl.none{opacity:.45;cursor:default}
+  .pstack .pl:not(.none):hover{background:var(--panel)}
+  .prod .s{color:var(--muted);font-size:11px}
+  .cart{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;position:sticky;top:70px}
+  .cartln{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+  .cartln .nm{flex:1;font-size:12.5px}
+  .num{width:60px!important;text-align:right}
+  @media(max-width:860px){
+    .side{transform:translateX(-100%)}
+    .side.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.5)}
+    .main{margin-left:0}
+    .burger{display:block}
+    .grid2,.grid3{grid-template-columns:1fr}
+    .posgrid{grid-template-columns:1fr}
+    .content{padding:14px}
+  }
+</style>
+</head>
+<body>
+<div id="authScreen" style="display:flex"><div class="authbox"><b style="color:var(--brand)">Mecca Books</b><p class="muted">Loading…</p></div></div>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">
+      <b>Mecca Books</b>
+      <small>The Security Mecca · Accounting</small>
+    </div>
+    <div class="branchsel">
+      <select id="branchSel" onchange="App.setBranch(this.value)"></select>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="whoami" id="whoami">Loading…</div>
+  </aside>
+
+  <main class="main">
+    <header class="top">
+      <button class="burger" onclick="document.getElementById('side').classList.toggle('open')">☰</button>
+      <h1 id="pageTitle">Dashboard</h1>
+      <div class="sp"></div>
+      <button class="btn p sm" onclick="App.quickAdd()">+ New</button>
+    </header>
+    <div class="content" id="view"></div>
+  </main>
+</div>
+
+<div class="status"><span class="dot" id="syncDot"></span><span id="syncTxt">Starting…</span></div>
+<div class="toast" id="toast"></div>
+<div id="modalRoot"></div>
+
+<script src="config.js"></script>
+<script src="vendor/supabase.js"></script>
+<script>
+/* ============================================================
+   MECCA BOOKS — original double-entry accounting for
+   The Security Mecca (Richards Bay + Vereeniging)
+   Data layer: shared cloud "db" capability (live sync, 30+ users,
+   no licensing). Falls back to local storage when offline/solo.
+   ============================================================ */
+"use strict";
+
+const VAT_RATE = 0.15;
+const COLLECTIONS = ["accounts","customers","suppliers","items","documents",
+  "journals","payments","projects","banktxns","bankrules","cashups","settings","counters","transfers","access","people"];
+const AUDIT_SKIP = new Set(["counters","audit","people"]);
+
+/* ---------- money helpers ---------- */
+const money = n => (Math.round((+n||0)*100)/100);
+const fmt = n => (money(n)<0?"-":"") + "R " + Math.abs(money(n)).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtn = n => money(n).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const today = () => new Date().toISOString().slice(0,10);
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ============================================================
+   STORE — abstracts the cloud db / local fallback
+   ============================================================ */
+const CFG = window.MB_CONFIG || {};
+const SHARED_COLLS = new Set(["items","settings","projects","transfers"]);   // visible to both branches
+const toEmail = u => { u=String(u||"").trim().toLowerCase(); return u.includes("@") ? u : u+"@"+(CFG.emailDomain||"staff.secmec.co.za"); };
+const normUser = u => String(u||"").trim().toLowerCase().replace(/\s+/g,".");
+function niceErr(e){
+  const m=(e&&(e.message||e.error_description||e.msg))||String(e||"");
+  if(/row-level security|violates|permission denied/i.test(m)) return "you don't have the right to do that";
+  if(/right to change prices/i.test(m)) return "you don't have the right to change prices or costs";
+  if(/Invalid login credentials/i.test(m)) return "wrong username or password";
+  if(/Database error saving new user|invitation only/i.test(m)) return "there's no invitation for that username";
+  if(/already registered|already exists|duplicate key/i.test(m)) return "that username is already taken";
+  if(/Failed to fetch|NetworkError|network/i.test(m)) return "no internet connection";
+  return m;
+}
+
+const Store = {
+  sb:null, uid:null, profile:null, profiles:{}, invites:[], chan:null,
+  _loaded:new Set(), _snap:{}, listeners:[],
+  data:Object.fromEntries([...COLLECTIONS,"audit"].map(c=>[c,{}])),   // {coll:{id:obj}}
+  _keep(coll,id,v){ (this._snap[coll]=this._snap[coll]||{})[id]= v==null?undefined:JSON.parse(JSON.stringify(v)); },
+
+  client(){
+    if(!this.sb) this.sb = window.supabase.createClient(CFG.url, CFG.anonKey,
+      {auth:{persistSession:true, autoRefreshToken:true, storageKey:"meccabooks-auth"}});
+    return this.sb;
+  },
+
+  // after sign-in: who am I, what may I see, load it, keep it live
+  async start(){
+    const { data:{ user } } = await this.client().auth.getUser();
+    if(!user) throw new Error("not signed in");
+    this.uid=user.id;
+    await this.loadProfiles();
+    if(this.profile && this.profile.active) {
+      await this.loadAll();
+      this.subscribe();
+      this.client().rpc("touch").then(()=>{},()=>{});
+    }
+  },
+  async loadProfiles(){
+    const { data, error } = await this.client().from("profiles").select("*");
+    if(!error){ this.profiles={}; (data||[]).forEach(p=>this.profiles[p.id]=p); }
+    this.profile=this.profiles[this.uid]||null;
+    if(can("users")){ const r=await this.client().from("invites").select("*"); this.invites=(r&&r.data)||[]; }
+    this._loaded.add("access");
+  },
+  _row2obj(r){
+    const o=Object.assign({}, r.data||{});
+    o.id=r.id; if(r.branch && !o.branch) o.branch=r.branch;
+    o._createdBy=r.created_by; o._createdAt=Date.parse(r.created_at)||null;
+    o._by=r.updated_by; o._at=Date.parse(r.updated_at)||null;
+    return o;
+  },
+  async loadAll(){
+    setStatus(false,"Loading…");
+    const sb=this.client(); const fresh=Object.fromEntries(COLLECTIONS.map(c=>[c,{}]));
+    for(let from=0;;from+=1000){
+      const { data, error } = await sb.from("docs").select("*").order("coll").order("id").range(from, from+999);
+      if(error){ toast("Couldn't load data: "+niceErr(error)); break; }
+      (data||[]).forEach(r=>{ (fresh[r.coll]=fresh[r.coll]||{})[r.id]=this._row2obj(r); });
+      if(!data || data.length<1000) break;
+    }
+    for(const c of Object.keys(fresh)){
+      this.data[c]=fresh[c]; this._snap[c]={};
+      Object.entries(fresh[c]).forEach(([id,v])=>this._keep(c,id,v)); this._loaded.add(c);
+    }
+    setStatus(true,"Live · synced");
+    this._emit();
+  },
+  subscribe(){
+    const sb=this.client();
+    if(this.chan) sb.removeChannel(this.chan);
+    this.chan = sb.channel("meccabooks-live")
+      .on("postgres_changes",{event:"*",schema:"public",table:"docs"}, p=>{
+        if(p.eventType==="DELETE"){ const o=p.old||{}; if(o.coll && this.data[o.coll]){ delete this.data[o.coll][o.id]; this._keep(o.coll,o.id,null); } }
+        else { const r=p.new; if(!r||!r.coll) return; const o=this._row2obj(r);
+               (this.data[r.coll]=this.data[r.coll]||{})[r.id]=o; this._keep(r.coll,r.id,o); }
+        this._emitSoon();
+      })
+      .on("postgres_changes",{event:"*",schema:"public",table:"profiles"}, ()=>{ this.loadProfiles().then(()=>this._emitSoon()); })
+      .subscribe(st=>{
+        if(st==="SUBSCRIBED") setStatus(true,"Live · synced");
+        else if(st==="CHANNEL_ERROR"||st==="TIMED_OUT"||st==="CLOSED") setStatus(false,"Reconnecting…");
+      });
+    // after the phone wakes up / the PC comes back online, catch up on anything missed
+    if(!this._wakeHooked){ this._wakeHooked=true;
+      const resync=()=>{ if(document.visibilityState==="visible" && this.profile) this.loadAll(); };
+      document.addEventListener("visibilitychange",resync); window.addEventListener("online",resync); }
+  },
+  async loadAudit(){
+    const { data, error } = await this.client().from("audit").select("*").order("at",{ascending:false}).limit(1000);
+    if(error){ toast("Couldn't load audit trail: "+niceErr(error)); return; }
+    const map={}; (data||[]).forEach(r=>{ map[r.id]={id:r.id,at:Date.parse(r.at),by:r.by,action:r.action,coll:r.coll,docId:r.doc_id,
+      branch:r.branch||"",label:r.label,amount:r.amount!=null?+r.amount:null,changed:r.changed||[]}; });
+    this.data.audit=map; this._loaded.add("audit"); this._emit();
+  },
+
+  all(coll){ return Object.values(this.data[coll]||{}); },
+  get(coll,id){ return (this.data[coll]||{})[id]||null; },
+  _clean(obj){ const o=JSON.parse(JSON.stringify(obj)); for(const k of ["_by","_at","_createdBy","_createdAt"]) delete o[k]; return o; },
+
+  async put(coll,obj){
+    if(!obj.id) obj.id=uid();
+    const existed=!!(this._snap[coll]&&this._snap[coll][obj.id]);
+    const shared=SHARED_COLLS.has(coll);
+    if(!shared && !obj.branch) obj.branch=recBranch(obj);
+    const branch = shared ? null : obj.branch;
+    obj._by=this.uid; obj._at=Date.now();
+    if(!existed){ obj._createdBy=this.uid; obj._createdAt=obj._at; }
+    this.data[coll][obj.id]=obj; this._emit();                 // show it straight away
+    const sb=this.client(), data=this._clean(obj);
+    const res = existed
+      ? await sb.from("docs").update({branch,data}).match({coll,id:obj.id}).select("id")
+      : await sb.from("docs").insert({coll,id:obj.id,branch,data}).select("id");
+    if(res.error || !res.data || !res.data.length){
+      const prev=this._snap[coll]&&this._snap[coll][obj.id];      // undo on screen
+      if(prev) this.data[coll][obj.id]=JSON.parse(JSON.stringify(prev)); else delete this.data[coll][obj.id];
+      this._emit();
+      const msg="Not saved — "+(res.error?niceErr(res.error):"you don't have the right to do that");
+      toast(msg); throw new Error(msg);
+    }
+    this._keep(coll,obj.id,obj);
+    return obj;
+  },
+  async del(coll,id){
+    if(!can("delete")){ toast("You don't have permission to delete"); return false; }
+    const { data, error } = await this.client().from("docs").delete().match({coll,id}).select("id");
+    if(error || !data || !data.length){ toast("Not deleted — "+(error?niceErr(error):"you don't have the right to do that")); return false; }
+    delete this.data[coll][id]; this._keep(coll,id,null); this._emit();
+    return true;
+  },
+  onChange(fn){ this.listeners.push(fn); },
+  _emit(){ this.listeners.forEach(f=>{try{f();}catch(e){console.error(e);}}); },
+  _emitSoon(){ clearTimeout(this._et); this._et=setTimeout(()=>this._emit(),150); }
+};
+
+/* ============================================================
+   CHART OF ACCOUNTS (standard SA small-business set)
+   ============================================================ */
+/* Each branch keeps its OWN chart of accounts (separate books).
+   Account docs: id "<BRANCH>_<code>", field branch:"RB"|"VV".
+   Journals carry j.branch and post to that branch's chart. */
+const STD_ACCOUNTS = [
+  // code, name, type  (Asset, Liability, Equity, Income, Expense)
+  ["1000","Bank — Current","Asset"],
+  ["1050","Cash on Hand / Till","Asset"],
+  ["1100","Debtors Control (Accounts Receivable)","Asset"],
+  ["1200","Inventory / Stock on Hand","Asset"],
+  ["1400","VAT Input (Control)","Asset"],
+  ["1500","Equipment & Tools","Asset"],
+  ["2000","Creditors Control (Accounts Payable)","Liability"],
+  ["2100","VAT Output (Control)","Liability"],
+  ["2900","Inter-branch Current Account","Liability"],
+  ["3000","Owner's Capital","Equity"],
+  ["3100","Retained Income","Equity"],
+  ["3200","Drawings","Equity"],
+  ["4000","Sales — Invoiced","Income"],
+  ["4100","Sales — POS / Counter","Income"],
+  ["4900","Other Income","Income"],
+  ["5000","Cost of Sales","Expense"],
+  ["6000","Rent","Expense"],
+  ["6050","Salaries & Wages","Expense"],
+  ["6100","Bank Charges","Expense"],
+  ["6150","Telephone & Internet","Expense"],
+  ["6200","Electricity & Water","Expense"],
+  ["6250","Vehicle & Fuel","Expense"],
+  ["6300","Repairs & Maintenance","Expense"],
+  ["6350","Stationery & Printing","Expense"],
+  ["6400","Marketing & Advertising","Expense"],
+  ["6900","Sundry Expenses","Expense"]
+];
+// quick lookup of control accounts by code
+const ACC = {
+  bank:"1000", till:"1050", debtors:"1100", stock:"1200",
+  vatIn:"1400", creditors:"2000", vatOut:"2100", interBranch:"2900", salesInv:"4000", salesPOS:"4100",
+  cos:"5000"
+};
+const normalSide = type => (type==="Asset"||type==="Expense")?"D":"C";
+
+/* ---- branch helpers ---- */
+const recBranch = r => (r && r.branch) || "RB";           // legacy records = Richards Bay
+const inBranch  = (r,b) => recBranch(r) === (b||App.branch);
+const branchAccounts = b => Store.all("accounts").filter(a=>inBranch(a,b||App.branch));
+const Company = b => Store.get("settings","company_"+(b||App.branch))
+                   || ((b||App.branch)==="RB" ? Store.get("settings","company") : null) || {};
+
+/* ============================================================
+   LEDGER — derive balances from journals (per branch, or "ALL")
+   ============================================================ */
+const Ledger = {
+  accByCode(code,b){ return branchAccounts(b).find(a=>a.code===code)
+                      || Store.all("accounts").find(a=>a.code===code) || null; },
+  // returns {code:{debit,credit,balance,type,name}}; scope = "RB" | "VV" | "ALL" (default current branch)
+  trialBalance(filter,scope){
+    scope=scope||App.branch;
+    const accs={};
+    const src = scope==="ALL" ? Store.all("accounts") : branchAccounts(scope);
+    src.forEach(a=>{ if(!accs[a.code]) accs[a.code]={code:a.code,name:a.name,type:a.type,debit:0,credit:0}; });
+    Store.all("journals").forEach(j=>{
+      if(scope!=="ALL" && !inBranch(j,scope)) return;
+      if(filter && !filter(j)) return;
+      (j.lines||[]).forEach(l=>{
+        if(!accs[l.account]) accs[l.account]={code:l.account,name:l.account,type:"?",debit:0,credit:0};
+        accs[l.account].debit += money(l.debit||0);
+        accs[l.account].credit += money(l.credit||0);
+      });
+    });
+    Object.values(accs).forEach(a=>{ a.balance = money(a.debit - a.credit); });
+    return accs;
+  },
+  accountBalance(code,filter,scope){ const a=this.trialBalance(filter,scope)[code]; return a?a.balance:0; },
+  // customer / supplier sub-ledger balance in this branch's books
+  partyBalance(kind,id,scope){
+    scope=scope||App.branch;
+    let bal=0;
+    Store.all("journals").forEach(j=>{
+      if(scope!=="ALL" && !inBranch(j,scope)) return;
+      if(j.party && j.party.kind===kind && j.party.id===id){
+        (j.lines||[]).forEach(l=>{
+          const ctrl = kind==="customer"?ACC.debtors:ACC.creditors;
+          if(l.account===ctrl) bal += money((l.debit||0)-(l.credit||0));
+        });
+      }
+    });
+    return kind==="customer"?bal:-bal; // supplier balance shown positive = we owe
+  }
+};
+
+/* ============================================================
+   POSTING — create balanced journals
+   ============================================================ */
+const Post = {
+  // check a branch's chart has every account a posting needs, BEFORE anything is written
+  ensure(branch,codes){
+    branch=branch||App.branch;
+    if(!branchAccounts(branch).length){ toast(App.branches[branch]+" books aren't set up yet — open Chart of Accounts"); return false; }
+    const chart=new Set(branchAccounts(branch).map(a=>a.code));
+    const missing=[...new Set(codes.filter(c=>c&&!chart.has(c)))];
+    if(missing.length){ toast("Account "+missing.join(", ")+" is missing from the "+App.branches[branch]+" chart"); return false; }
+    return true;
+  },
+  async journal(j){
+    const D=money((j.lines||[]).reduce((s,l)=>s+(+l.debit||0),0));
+    const C=money((j.lines||[]).reduce((s,l)=>s+(+l.credit||0),0));
+    if(Math.abs(D-C)>0.009){ toast("Journal not balanced ("+fmt(D)+" vs "+fmt(C)+")"); throw new Error("unbalanced"); }
+    j.id=j.id||uid();
+    j.branch=j.branch||App.branch;
+    const chart=new Set(branchAccounts(j.branch).map(a=>a.code));
+    const missing=[...new Set((j.lines||[]).map(l=>l.account).filter(c=>!chart.has(c)))];
+    if(missing.length){ toast("Account "+missing.join(", ")+" isn't in the "+App.branches[j.branch]+" chart — add it there first"); throw new Error("missing account"); }
+    j.date=j.date||today();
+    return Store.put("journals",j);
+  }
+};
+
+/* ============================================================
+   DOCUMENT NUMBERS
+   ============================================================ */
+// each branch has its own number series: RB-INV000001, VV-INV000001 …
+async function nextNo(key,prefix,pad,branch){
+  const b=branch||App.branch;
+  const { data, error } = await Store.client().rpc("next_no",{k:b+"_"+key});   // safe with many users at once
+  if(error){ toast("Couldn't get a document number — "+niceErr(error)); throw new Error(error.message); }
+  return b+"-"+prefix+String(data).padStart(pad||6,"0");
+}
+
+/* ---- stock per branch: item.stock = {RB:n, VV:n} (legacy item.qty = Richards Bay) ---- */
+function stockOf(it){ return it.stock ? it.stock : {RB:+it.qty||0}; }
+function qtyOf(it,b){ b=b||App.branch; const s=stockOf(it);
+  return b==="ALL" ? Object.keys(App.branches).reduce((x,k)=>x+(+s[k]||0),0) : (+s[b]||0); }
+function addQty(it,b,d){ const s={...stockOf(it)}; s[b]=Math.round(((+s[b]||0)+d)*1000)/1000; it.stock=s; delete it.qty; }
+
+/* ---- 6 PRICE LEVELS: Trade, Special, Retail + 3 own labels ----
+   item.pcts[6]  = % per level (margin or markup, see Setup)
+   item.prices[6]= selling price excl VAT per level (derived from cost + %) */
+const DEF_LABELS=["Trade","Special","Retail","Self label 1","Self label 2","Self label 3"];
+const DEF_PCTS=[20,35,40,null,null,null];
+function Pricing(){ const s=Store.get("settings","pricing")||{};
+  return {labels:(s.labels&&s.labels.length===6)?s.labels:DEF_LABELS, pcts:(s.pcts&&s.pcts.length===6)?s.pcts:DEF_PCTS,
+          basis:s.basis||"margin", posLevel:s.posLevel!=null?+s.posLevel:0, custLevel:s.custLevel!=null?+s.custLevel:0}; }
+const isNum = v => v!==null && v!=="" && v!==undefined && !isNaN(+v);
+function priceFrom(cost,pct,basis){
+  if(!isNum(pct)) return null; cost=+cost||0; pct=+pct;
+  if((basis||Pricing().basis)==="margin"){ if(pct>=100) return null; return money(cost/(1-pct/100)); }
+  return money(cost*(1+pct/100));
+}
+function pctFrom(cost,price,basis){
+  cost=+cost||0; price=+price||0; if(!cost||!price) return null;
+  return (basis||Pricing().basis)==="margin" ? Math.round((1-cost/price)*10000)/100 : Math.round((price/cost-1)*10000)/100;
+}
+function pricesOf(it){ if(Array.isArray(it.prices)) return it.prices.slice(0,6).concat(Array(6).fill(null)).slice(0,6);
+  const a=Array(6).fill(null); if(isNum(it.price)) a[0]=+it.price; return a; }
+function priceOf(it,l){ const v=pricesOf(it)[l||0]; return isNum(v)?+v:null; }
+function pctsOf(it){ return Array.isArray(it.pcts) ? it.pcts.slice(0,6).concat(Array(6).fill(null)).slice(0,6) : Pricing().pcts.slice(); }
+// recompute every level that has a % from the item's cost
+function repriceItem(it){
+  const b=Pricing().basis, pc=pctsOf(it), pr=pricesOf(it).slice();
+  pc.forEach((x,l)=>{ const v=priceFrom(it.cost,x,b); if(v!=null) pr[l]=v; });
+  it.pcts=pc; it.prices=pr; it.price=pr[0]; delete it.markup;
+  return it;
+}
+
+/* ---- scope = what lists/reports show: a branch, or "ALL" (combined) ---- */
+const scope = () => { const sc=App.rscope||App.branch; return (sc==="ALL"&&allowedBranches().length<2)||(sc!=="ALL"&&!can("br_"+sc)) ? App.branch : sc; };
+const inScope = r => scope()==="ALL" || inBranch(r,scope());
+const scopeName = () => scope()==="ALL" ? "Both branches (combined)" : App.branches[scope()];
+
+/* ============================================================
+   NAMES — show each user's name from their Mecca Books login
+   ============================================================ */
+const Names = {
+  label(id){
+    if(!id) return "System";
+    const p=Store.profiles[id];
+    const n=p ? (p.full_name||p.username) : "Unknown user";
+    return id===Store.uid ? n+" (you)" : n;
+  },
+  tag(id){ return `<span data-uid="${esc(id||"")}">${esc(this.label(id))}</span>`; },
+  fill(root){ (root||document).querySelectorAll("[data-uid]").forEach(e=>{ e.textContent=this.label(e.dataset.uid); }); }
+};
+
+/* ============================================================
+   APP / ROUTER / UI
+   ============================================================ */
+/* ============================================================
+   ACCESS — per-user rights, ticked by the owner (Users & Access)
+   access/<userId> = {perms:{key:true}}   ·   the owner always has everything
+   ============================================================ */
+const PERM_GROUPS=[
+  {g:"Branches", items:[["br_RB","Richards Bay"],["br_VV","Vereeniging"]]},
+  {g:"Sales", items:[["pos","Point of Sale"],["cashup","Daily Cash-up"],["documents","Quotes & Invoices"],["customers","Customers"],["receipts","Receipts"]]},
+  {g:"Purchases", items:[["suppliers","Suppliers"],["bills","Supplier Bills"],["payments","Payments"]]},
+  {g:"Banking & accounting", items:[["bank","Bank & Auto-allocate"],["accounts","Chart of Accounts"],["journals","Journals"],["projects","Projects"]]},
+  {g:"Stock", items:[["inventory","Stock / Inventory"],["transfer","Transfer stock between branches"]]},
+  {g:"Reports", items:[["dash","Dashboard"],["vat","VAT Report"],["reports","Financial Reports"],["audit","Audit Trail"]]},
+  {g:"Special rights", items:[["seeCost","See cost prices, margins & profit"],["editPrices","Change selling prices / sell at any price level"],["delete","Delete records"],["setup","Setup (company details & price levels)"],["users","Manage users & access"]]}
+];
+const ALL_PERMS=PERM_GROUPS.flatMap(g=>g.items.map(i=>i[0]));
+const PERM_PRESETS={
+  "Cashier":["pos","cashup","customers","receipts","inventory"],
+  "Sales":["dash","pos","cashup","documents","customers","receipts","inventory"],
+  "Bookkeeper":["dash","documents","customers","receipts","suppliers","bills","payments","bank","accounts","journals","projects","inventory","vat","reports","seeCost"],
+  "Manager":ALL_PERMS.filter(k=>!k.startsWith("br_"))
+};
+function isOwnerUser(){ return !!(Store.profile && Store.profile.active && Store.profile.is_owner); }
+function permsOf(uid){ const p=Store.profiles[uid]; return (p&&p.perms)||{}; }
+function can(key){ const p=Store.profile; if(!p||!p.active) return false; if(p.is_owner) return true; return !!(p.perms||{})[key]; }
+function allowedBranches(){ return Object.keys(App.branches).filter(b=>can("br_"+b)); }
+
+const NAV = [
+  {grp:"Overview"},
+  {id:"dash",ic:"▦",t:"Dashboard"},
+  {grp:"Sales"},
+  {id:"pos",ic:"🛒",t:"Point of Sale"},
+  {id:"cashup",ic:"💵",t:"Daily Cash-up"},
+  {id:"documents",ic:"🧾",t:"Quotes & Invoices"},
+  {id:"customers",ic:"👥",t:"Customers"},
+  {id:"receipts",ic:"⬇",t:"Receipts"},
+  {grp:"Purchases"},
+  {id:"suppliers",ic:"🏭",t:"Suppliers"},
+  {id:"bills",ic:"📥",t:"Supplier Bills"},
+  {id:"payments",ic:"⬆",t:"Payments"},
+  {grp:"Banking"},
+  {id:"bank",ic:"🏦",t:"Bank & Auto-allocate"},
+  {grp:"Accounting"},
+  {id:"accounts",ic:"📚",t:"Chart of Accounts"},
+  {id:"journals",ic:"✎",t:"Journals"},
+  {id:"projects",ic:"📂",t:"Projects"},
+  {id:"inventory",ic:"📦",t:"Stock / Inventory"},
+  {grp:"Reports"},
+  {id:"vat",ic:"％",t:"VAT Report"},
+  {id:"reports",ic:"📈",t:"Financial Reports"},
+  {id:"audit",ic:"🛡",t:"Audit Trail"},
+  {grp:"Admin"},
+  {id:"users",ic:"🔑",t:"Users & Access"},
+  {id:"setup",ic:"⚙",t:"Setup"}
+];
+
+const App = {
+  route:"dash", branch:"RB", cart:[],
+  branches:{RB:"Richards Bay", VV:"Vereeniging"},
+
+  async start(){
+    await Store.start();
+    if(!Store.profile || !Store.profile.active){ Auth.blocked(); return false; }
+    Store.onChange(()=>this.render());
+    this.renderNav();
+    // branch selector
+    const bs=document.getElementById("branchSel");
+    this._fillBranchSel();
+    // identity
+    await this._whoami();
+    Auth.watchIdle();
+    this.go(location.hash.replace("#","")||"dash");
+    window.addEventListener("hashchange",()=>this.go(location.hash.replace("#","")||"dash"));
+  },
+  async _whoami(){
+    const p=Store.profile||{};
+    const role=p.is_owner?"Owner":"Staff";
+    this.renderNav(); document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("on",a.dataset.r===this.route));
+    document.getElementById("whoami").innerHTML=`Signed in as <b>${esc(p.full_name||p.username||"")}</b> <span class="muted">(${esc(p.username||"")})</span><br>${role} · ${this.branches[this.branch]}<br>
+      <span style="font-size:10.5px">Everything you do is recorded under your name.</span>
+      <div style="margin-top:8px;display:flex;gap:6px"><button class="btn sm" onclick="Auth.changePassword()">Change password</button><button class="btn sm" onclick="Auth.signOut()">Sign out</button></div>`;
+  },
+  _fillBranchSel(){
+    const bs=document.getElementById("branchSel"); if(!bs) return;
+    const ab=allowedBranches();
+    bs.innerHTML=ab.map(k=>`<option value="${k}">${this.branches[k]}</option>`).join("")||`<option>No branch access</option>`;
+    bs.value=this.branch; bs.disabled=ab.length<2; bs.dataset.sig=ab.join(",");
+  },
+  setBranch(b){ if(!can("br_"+b)) return; this.branch=b; this.rscope=b; if(this.cart.length){ this.cart=[]; toast("Sale cleared — switched to "+this.branches[b]+" till"); } this._whoami(); this.render(); },
+  renderNav(){
+    const vis=NAV.filter(n=>n.grp||can(n.id));
+    const shown=vis.filter((n,i)=>!n.grp || (vis[i+1] && !vis[i+1].grp));
+    document.getElementById("nav").innerHTML = shown.map(n=>
+      n.grp?`<div class="grp">${n.grp}</div>`
+      :`<a data-r="${n.id}" onclick="App.go('${n.id}')"><span class="ic">${n.ic}</span>${n.t}</a>`
+    ).join("");
+  },
+  go(r){
+    this.route=r; location.hash=r;
+    document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("on",a.dataset.r===r));
+    const nav=NAV.find(n=>n.id===r);
+    document.getElementById("pageTitle").textContent=nav?nav.t:"Dashboard";
+    document.getElementById("side").classList.remove("open");
+    this.render();
+  },
+  render(){
+    const el=document.getElementById("view");
+    // keep the branch inside what this user may use
+    const ab=allowedBranches();
+    if(ab.length && !ab.includes(this.branch)){ this.branch=ab[0]; this.rscope=ab[0]; this._fillBranchSel(); }
+    const bs=document.getElementById("branchSel");
+    if(bs && bs.dataset.sig!==ab.join(",")) this._fillBranchSel();
+    if(this._navSig!==JSON.stringify(permsOf(Store.uid))+isOwnerUser()){ this._navSig=JSON.stringify(permsOf(Store.uid))+isOwnerUser(); this.renderNav();
+      document.querySelectorAll(".nav a").forEach(a=>a.classList.toggle("on",a.dataset.r===this.route)); }
+    if(!Store._loaded.has("access")){
+      el.innerHTML=`<div class="empty">Loading your access…</div>`; return;
+    }
+    if(!ab.length || !can(this.route)){
+      const first=NAV.find(n=>n.id&&can(n.id));
+      el.innerHTML = `<div class="card" style="max-width:520px"><h3>No access</h3>
+        <p>${!ab.length?"You haven't been given access to a branch yet.":"You don't have access to this screen."}</p>
+        <p class="muted">Signed in as <b>${esc(Names.label(Store.uid))}</b>. Ask the owner to tick your access under <b>Users &amp; Access</b>.</p>
+        ${first&&ab.length?`<button class="btn p" onclick="App.go('${first.id}')">Go to ${esc(first.t)}</button>`:""}</div>`;
+      return;
+    }
+    const fn = Views[this.route]||Views.dash;
+    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
+  },
+  quickAdd(){
+    const map={documents:()=>Forms.document(),customers:()=>Forms.customer(),suppliers:()=>Forms.supplier(),
+      inventory:()=>Forms.item(),journals:()=>Forms.journal(),payments:()=>Forms.payment("payment"),
+      receipts:()=>Forms.payment("receipt"),bills:()=>Forms.bill(),projects:()=>Forms.project(),
+      accounts:()=>Forms.account(),pos:()=>App.go("pos")};
+    if(!can(this.route)||!map[this.route]){ toast("Nothing to add on this screen"); return; }
+    map[this.route]();
+  },
+  needSetup(){ return branchAccounts(App.branch).length===0; }
+};
+
+/* ---------- UI utilities ---------- */
+function setStatus(on,txt){
+  document.getElementById("syncDot").className="dot "+(on?"on":"off");
+  document.getElementById("syncTxt").textContent=txt;
+}
+let toastT;
+function toast(msg){
+  const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2400);
+}
+function modal(html,wide){
+  document.getElementById("modalRoot").innerHTML=
+   `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal ${wide?'wide':''}">${html}</div></div>`;
+  Names.fill(document.getElementById("modalRoot"));
+}
+function closeModal(){ document.getElementById("modalRoot").innerHTML=""; }
+const opts = (arr,val,fmtFn)=>arr.map(o=>`<option value="${esc(o.v)}" ${o.v==val?"selected":""}>${esc(fmtFn?fmtFn(o):o.t)}</option>`).join("");
+function accountOptions(sel,types,b){
+  let a=branchAccounts(b).sort((x,y)=>x.code.localeCompare(y.code));
+  if(types) a=a.filter(x=>types.includes(x.type));
+  return a.map(x=>`<option value="${x.code}" ${x.code===sel?"selected":""}>${x.code} — ${esc(x.name)}</option>`).join("");
+}
+function projectOptions(sel){
+  return `<option value="">— none —</option>`+Store.all("projects").filter(p=>p.status!=="closed")
+    .map(p=>`<option value="${p.id}" ${p.id===sel?"selected":""}>${esc(p.name)}</option>`).join("");
+}
+/* ============================================================
+   VIEWS
+   ============================================================ */
+const Views = {
+  _setupBanner(){
+    if(App.needSetup())
+      return `<div class="banner">👋 <b>${App.branches[App.branch]}</b> doesn't have its own chart of accounts yet. Load the standard chart for this branch (you can edit it afterwards). <button class="btn p sm" onclick="Actions.initCompany()">Set up ${App.branches[App.branch]} books</button></div>`;
+    return "";
+  },
+  _branchHead(extra){
+    return `<div class="muted" style="margin:-4px 0 12px">📍 <b style="color:var(--brand)">${App.branches[App.branch]}</b> books${extra?" · "+extra:""}</div>`;
+  },
+
+  dash(){
+    const s=Views._setupBanner();
+    const sc=scope();
+    const tb=Ledger.trialBalance(null,sc);
+    // cash & bank = all asset accounts coded 10xx in this branch's chart
+    const bankBal = money(Object.values(tb).filter(a=>a.type==="Asset"&&/^10/.test(a.code)).reduce((x,a)=>x+a.balance,0));
+    const debtors = Ledger.accountBalance(ACC.debtors,null,sc);
+    const creditors = -Ledger.accountBalance(ACC.creditors,null,sc);
+    const income = -Object.values(tb).filter(a=>a.type==="Income").reduce((x,a)=>x+a.balance,0);
+    const expense = Object.values(tb).filter(a=>a.type==="Expense").reduce((x,a)=>x+a.balance,0);
+    const profit = money(income-expense);
+    const vat = money(-Ledger.accountBalance(ACC.vatOut,null,sc) - Ledger.accountBalance(ACC.vatIn,null,sc));
+    const recentDocs = Store.all("documents").filter(d=>inScope(d)&&d.type!=="bill").sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,6);
+    return s+Views._scopeSel()+`
+    <div class="kpis">
+      <div class="kpi"><div class="l">Cash & Bank</div><div class="v">${fmt(bankBal)}</div></div>
+      <div class="kpi"><div class="l">Debtors owe you</div><div class="v good">${fmt(debtors)}</div></div>
+      <div class="kpi"><div class="l">You owe creditors</div><div class="v bad">${fmt(creditors)}</div></div>
+      ${can("seeCost")?`<div class="kpi"><div class="l">Profit (to date)</div><div class="v ${profit>=0?'good':'bad'}">${fmt(profit)}</div></div>`:""}
+    </div>
+    <div class="row">
+      <div class="card" style="flex:2;min-width:300px;${can("seeCost")?"":"display:none"}">
+        <h3>Income vs Expenses</h3>
+        <div class="totbox" style="max-width:none;margin:0">
+          <div class="tr"><span>Total income</span><b>${fmt(income)}</b></div>
+          <div class="tr"><span>Total expenses</span><b>${fmt(expense)}</b></div>
+          <div class="tr g"><span>Net profit</span><b class="${profit>=0?'':''}">${fmt(profit)}</b></div>
+        </div>
+      </div>
+      <div class="card" style="flex:1;min-width:240px">
+        <h3>VAT position</h3>
+        <div class="totbox" style="max-width:none;margin:0">
+          <div class="tr"><span>VAT on sales (output)</span><b>${fmt(-Ledger.accountBalance(ACC.vatOut,null,sc))}</b></div>
+          <div class="tr"><span>VAT on purchases (input)</span><b>${fmt(Ledger.accountBalance(ACC.vatIn,null,sc))}</b></div>
+          <div class="tr g"><span>${vat>=0?'Payable to SARS':'Refund due'}</span><b>${fmt(Math.abs(vat))}</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Recent documents</h3>
+      ${recentDocs.length?`<div class="tbl-wrap"><table><thead><tr><th>No.</th><th>Date</th><th>Customer</th><th>Type</th><th class="r">Total</th><th>Status</th></tr></thead><tbody>
+      ${recentDocs.map(d=>`<tr onclick="Forms.document('${d.id}')" style="cursor:pointer">
+        <td>${esc(d.no)}</td><td>${esc(d.date)}</td><td>${esc(Views._custName(d.customerId))}${sc==="ALL"?` <span class="muted">· ${App.branches[recBranch(d)]}</span>`:""}</td>
+        <td><span class="pill ${d.type==='invoice'?'inv':'q'}">${d.type}</span></td>
+        <td class="r">${fmt(d.total)}</td><td>${Views._docStatus(d)}</td></tr>`).join("")}
+      </tbody></table></div>`:`<div class="empty">No documents yet. Create your first quote or invoice.</div>`}
+    </div>`;
+  },
+  _custName(id){ const c=Store.get("customers",id); return c?c.name:"—"; },
+  _docStatus(d){
+    if(d.type==="quote") return `<span class="pill q">Quote</span>`;
+    const paid=d.paid||0;
+    if(paid>=d.total-0.01) return `<span class="pill paid">Paid</span>`;
+    if(paid>0) return `<span class="pill due">Part-paid</span>`;
+    return `<span class="pill due">Unpaid</span>`;
+  },
+
+  // six prices below each other: Trade, Special, Retail, then the 3 own labels
+  _priceStack(it,active,clickFn){
+    const P=Pricing();
+    return `<div class="pstack">`+P.labels.map((lb,l)=>{ const v=priceOf(it,l);
+      return `<div class="pl ${l===active?'on':''} ${v==null?'none':''}" ${clickFn&&v!=null?`onclick="event.stopPropagation();${clickFn}(${l})"`:""}>
+        <span>${esc(lb)}</span><b>${v!=null?fmt(v):"—"}</b></div>`; }).join("")+`</div>`;
+  },
+
+  /* ---- POS ---- */
+  pos(){
+    const items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
+    const cart=App.cart;
+    const sub=money(cart.reduce((s,l)=>s+l.qty*l.price,0));
+    const vat=money(sub*VAT_RATE), tot=money(sub+vat);
+    return `
+    <div class="posgrid">
+      <div>
+        <div class="toolbar">
+          <input class="search" placeholder="Search products…" oninput="Views._posFilter(this.value)">
+          <label style="margin:0">Sell at:</label>
+          <select style="max-width:170px" onchange="App.posLevel=+this.value;App.render()" ${can("editPrices")?"":"disabled title='Only users with price rights can change the price level'"}>
+            ${Pricing().labels.map((lb,l)=>`<option value="${l}" ${l===App.getPosLevel()?"selected":""}>${esc(lb)}</option>`).join("")}</select>
+          <span class="muted">Till: ${App.branches[App.branch]}</span>
+        </div>
+        <div class="muted" style="font-size:12px;margin:-6px 0 10px">Tap a product to sell at <b>${esc(Pricing().labels[App.getPosLevel()])}</b>, or tap any price line to sell at that price.</div>
+        <div class="prodgrid" id="posProducts">
+          ${items.length?items.map(i=>`<div class="prod" role="button" data-name="${esc((i.name+" "+(i.code||"")).toLowerCase())}" onclick="App.cartAdd('${i.id}')">
+            <div class="n">${esc(i.name)}</div>
+            <div class="s">${esc(i.code||"")} · ${qtyOf(i)} on hand</div>
+            ${Views._priceStack(i,App.getPosLevel(),can("editPrices")?"App.cartAdd.bind(null,'"+i.id+"')":null)}</div>`).join("")
+            :`<div class="empty">No stock items. Add them under Stock / Inventory.</div>`}
+        </div>
+      </div>
+      <div>
+        <div class="cart">
+          <h3 style="margin:0 0 10px;color:var(--muted)">Current Sale</h3>
+          ${cart.length?cart.map((l,i)=>`<div class="cartln">
+            <span class="nm">${esc(l.name)}<br><small class="muted">${fmt(l.price)} ea · ${esc(Pricing().labels[l.level||0])}</small></span>
+            <input class="num" type="number" min="1" value="${l.qty}" onchange="App.cartQty(${i},this.value)">
+            <span class="right" style="width:78px">${fmt(l.qty*l.price)}</span>
+            <span style="cursor:pointer;color:var(--bad)" onclick="App.cartDel(${i})">✕</span>
+          </div>`).join(""):`<div class="empty" style="padding:20px">Tap products to add</div>`}
+          <div class="totbox" style="max-width:none">
+            <div class="tr"><span>Subtotal</span><span>${fmt(sub)}</span></div>
+            <div class="tr"><span>VAT 15%</span><span>${fmt(vat)}</span></div>
+            <div class="tr g"><span>TOTAL</span><span>${fmt(tot)}</span></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn g" style="flex:1" ${cart.length?"":"disabled"} onclick="Actions.posPay('cash')">Cash</button>
+            <button class="btn p" style="flex:1" ${cart.length?"":"disabled"} onclick="Actions.posPay('card')">Card</button>
+          </div>
+          <button class="btn sm" style="width:100%;margin-top:8px" ${cart.length?"":"disabled"} onclick="App.cart=[];App.render()">Clear sale</button>
+        </div>
+      </div>
+    </div>`;
+  },
+  _posFilter(q){ q=q.toLowerCase(); document.querySelectorAll("#posProducts .prod").forEach(p=>{ p.style.display=p.dataset.name.includes(q)?"":"none"; }); },
+
+  /* ---- Cash-up ---- */
+  cashup(){
+    const list=Store.all("cashups").filter(c=>inScope(c)).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+    // today's expected till movement
+    const js=Store.all("journals").filter(j=>inBranch(j) && j.date===today());
+    let cashIn=0,cashOut=0;
+    js.forEach(j=>(j.lines||[]).forEach(l=>{ if(l.account===ACC.till){ cashIn+=money(l.debit||0); cashOut+=money(l.credit||0); }}));
+    const expected=money(cashIn-cashOut);
+    return `
+    <div class="banner">Daily cash-up reconciles the physical cash in your till against what the system recorded for <b>${App.branches[App.branch]}</b> today.</div>
+    <div class="card">
+      <h3>Today — ${today()}</h3>
+      <div class="totbox" style="max-width:none;margin:0 0 12px">
+        <div class="tr"><span>Cash received into till today</span><b>${fmt(cashIn)}</b></div>
+        <div class="tr"><span>Cash paid out of till today</span><b>${fmt(cashOut)}</b></div>
+        <div class="tr g"><span>Expected cash in till</span><b>${fmt(expected)}</b></div>
+      </div>
+      <button class="btn p" onclick="Forms.cashup(${expected})">Count & close cash-up</button>
+    </div>
+    <div class="card"><h3>Previous cash-ups — ${scopeName()}</h3>${Views._scopeSel()}
+    ${list.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Branch</th><th class="r">Expected</th><th class="r">Counted</th><th class="r">Variance</th><th>By</th></tr></thead><tbody>
+    ${list.map(c=>`<tr><td>${esc(c.date)}</td><td>${App.branches[c.branch]||c.branch}</td><td class="r">${fmt(c.expected)}</td><td class="r">${fmt(c.counted)}</td>
+      <td class="r" style="color:${Math.abs(c.variance)<0.01?'var(--good)':(c.variance<0?'var(--bad)':'var(--warn)')}">${fmt(c.variance)}</td><td>${esc(c.note||"")}</td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="empty">No cash-ups recorded yet.</div>`}
+    </div>`;
+  },
+
+  /* ---- Documents (quotes & invoices) ---- */
+  documents(){
+    const docs=Store.all("documents").filter(d=>d.type!=="bill"&&inScope(d)).sort((a,b)=>(b.no||"").localeCompare(a.no||""));
+    return Views._scopeSel()+`<div class="toolbar">
+      <button class="btn p" onclick="Forms.document()">+ New quote / invoice</button>
+      <input class="search" placeholder="Search…" oninput="Views._tblFilter(this,'docRows')">
+    </div>
+    ${docs.length?`<div class="tbl-wrap"><table><thead><tr><th>No.</th>${scope()==="ALL"?"<th>Branch</th>":""}<th>Date</th><th>Customer</th><th>Project</th><th>Type</th><th class="r">Total</th><th>Status</th><th></th></tr></thead><tbody id="docRows">
+    ${docs.map(d=>`<tr data-s="${esc((d.no+Views._custName(d.customerId)).toLowerCase())}">
+      <td>${esc(d.no)}</td>${scope()==="ALL"?`<td class="muted">${App.branches[recBranch(d)]}</td>`:""}<td>${esc(d.date)}</td><td>${esc(Views._custName(d.customerId))}</td>
+      <td class="muted">${esc(Views._projName(d.projectId))}</td>
+      <td><span class="pill ${d.type==='invoice'?'inv':'q'}">${d.type}</span></td>
+      <td class="r">${fmt(d.total)}</td><td>${Views._docStatus(d)}</td>
+      <td class="r"><button class="btn sm" onclick="Forms.document('${d.id}')">Open</button></td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="empty">No documents yet.</div>`}`;
+  },
+  _projName(id){ const p=Store.get("projects",id); return p?p.name:""; },
+  _tblFilter(inp,id){ const q=inp.value.toLowerCase(); document.querySelectorAll("#"+id+" tr").forEach(r=>{ r.style.display=(r.dataset.s||"").includes(q)?"":"none"; }); },
+
+  /* ---- Customers ---- */
+  _partyList(kind){
+    const coll=kind==="customer"?"customers":"suppliers";
+    const sc=scope();
+    const cs=Store.all(coll).filter(inScope).sort((a,b)=>a.name.localeCompare(b.name));
+    const isC=kind==="customer";
+    const word=isC?"Owing":"Owed", color=isC?"var(--good)":"var(--bad)";
+    const tot=money(cs.reduce((x,c)=>x+Ledger.partyBalance(kind,c.id,recBranch(c)),0));
+    return Views._scopeSel()+`<div class="toolbar"><button class="btn p" onclick="Forms.${kind}()">+ New ${App.branches[App.branch]} ${kind}</button>
+      <input class="search" placeholder="Search…" oninput="Views._tblFilter(this,'${kind}Rows')">
+      <span class="muted">${cs.length} ${coll} · ${word.toLowerCase()} ${fmt(tot)}</span></div>
+    ${cs.length?`<div class="tbl-wrap"><table><thead><tr><th>Name</th>${sc==="ALL"?"<th>Branch</th>":""}<th>Contact</th><th>Phone</th>${isC?"<th>VAT No.</th><th>Price level</th>":""}<th class="r">${word}</th><th></th></tr></thead><tbody id="${kind}Rows">
+    ${cs.map(c=>{const bal=Ledger.partyBalance(kind,c.id,recBranch(c));return `<tr data-s="${esc((c.name||"").toLowerCase())}">
+      <td><b>${esc(c.name)}</b></td>${sc==="ALL"?`<td class="muted">${App.branches[recBranch(c)]}</td>`:""}<td>${esc(c.contact||"")}</td><td>${esc(c.phone||"")}</td>
+      ${isC?`<td class="muted">${esc(c.vat||"")}</td><td>${esc(Pricing().labels[isNum(c.priceLevel)?+c.priceLevel:Pricing().custLevel])}</td>`:""}
+      <td class="r" style="color:${Math.abs(bal)>0.01?color:'var(--muted)'}">${fmt(bal)}</td>
+      <td class="r"><button class="btn sm" onclick="Forms.${kind}('${c.id}')">Edit</button></td></tr>`;}).join("")}
+    </tbody></table></div>`:`<div class="empty">No ${coll} in ${scopeName()} yet.${!isC?" (You buy from Inhep/IDS — add them here.)":""}</div>`}`;
+  },
+  customers(){ return Views._partyList("customer"); },
+  suppliers(){ return Views._partyList("supplier"); },
+  /* ---- Supplier bills ---- */
+  bills(){
+    const bills=Store.all("documents").filter(d=>d.type==="bill"&&inScope(d)).sort((a,b)=>(b.no||"").localeCompare(a.no||""));
+    return Views._scopeSel()+`<div class="toolbar">
+      <button class="btn p" onclick="Forms.bill()">+ Record supplier bill</button>
+      <span class="muted">Take a photo of the supplier's invoice to keep it with the bill.</span></div>
+    ${bills.length?`<div class="tbl-wrap"><table><thead><tr><th>Ref</th>${scope()==="ALL"?"<th>Branch</th>":""}<th>Supplier inv.</th><th>Date</th><th>Supplier</th><th class="r">Total</th><th>Status</th><th>Invoice</th></tr></thead><tbody>
+    ${bills.map(d=>{const sup=Store.get("suppliers",d.supplierId);return `<tr>
+      <td>${esc(d.no)}${d.source==='photo'?' 📷':''}</td>${scope()==="ALL"?`<td class="muted">${App.branches[recBranch(d)]}</td>`:""}<td class="muted">${esc(d.ref||"")}</td><td>${esc(d.date)}</td><td>${esc(sup?sup.name:"—")}</td><td class="r">${fmt(d.total)}</td>
+      <td>${(d.paid||0)>=d.total-0.01?'<span class="pill paid">Paid</span>':'<span class="pill due">Unpaid</span>'}</td>
+      <td>${d.attachment
+        ?`<button class="btn sm" onclick="Forms.viewAttachment('${d.id}')">📎 View</button>`
+        :`<label class="btn sm" style="cursor:pointer;display:inline-block">📎 Attach<input type="file" accept="image/*,application/pdf" style="display:none" onchange="Actions.attachToBill('${d.id}',this.files[0])"></label>`}</td></tr>`;}).join("")}
+    </tbody></table></div>`:`<div class="empty">No supplier bills recorded.</div>`}`;
+  },
+
+  /* ---- Payments & Receipts ---- */
+  payments(){ return Views._payList("payment","Payments made"); },
+  receipts(){ return Views._payList("receipt","Receipts"); },
+  _payList(kind,title){
+    const ps=Store.all("payments").filter(p=>p.kind===kind&&inScope(p)).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+    return Views._scopeSel()+`<div class="toolbar"><button class="btn p" onclick="Forms.payment('${kind}')">+ New ${kind}</button></div>
+    ${ps.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th>${scope()==="ALL"?"<th>Branch</th>":""}<th>Ref</th><th>${kind==='receipt'?'From':'To'}</th><th>Account</th><th>Via</th><th class="r">Amount</th></tr></thead><tbody>
+    ${ps.map(p=>`<tr><td>${esc(p.date)}</td>${scope()==="ALL"?`<td class="muted">${App.branches[recBranch(p)]}</td>`:""}<td>${esc(p.ref||"")}</td><td>${esc(p.who||"")}</td>
+      <td class="muted">${esc(Views._accLabel(p.account))}</td><td>${esc(Views._accLabel(p.via))}</td><td class="r">${fmt(p.amount)}</td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="empty">No ${title.toLowerCase()} yet.</div>`}`;
+  },
+  _accLabel(code){ const a=Ledger.accByCode(code); return a?(a.code+" "+a.name):code||""; },
+
+  /* ---- Bank & auto-allocate ---- */
+  bank(){
+    const txns=Store.all("banktxns").filter(t=>inBranch(t)).sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,200);
+    const rules=Store.all("bankrules").filter(r=>inBranch(r));
+    const unalloc=txns.filter(t=>!t.allocated).length;
+    return `
+    <div class="banner">Import your bank statement (CSV from FNB / Absa / Standard / Nedbank), then the system auto-allocates each line using your rules. Unmatched lines you allocate once, and can save as a new rule.</div>
+    <div class="toolbar">
+      <button class="btn p" onclick="Forms.bankImport()">⬆ Import statement (CSV)</button>
+      <button class="btn" onclick="Actions.autoAllocate()">⚡ Auto-allocate (${unalloc} unallocated)</button>
+      <button class="btn" onclick="Forms.bankRules()">Manage rules (${rules.length})</button>
+    </div>
+    ${txns.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Description</th><th class="r">Amount</th><th>Allocated to</th><th></th></tr></thead><tbody>
+    ${txns.map(t=>`<tr><td>${esc(t.date)}</td><td>${esc(t.desc)}</td>
+      <td class="r" style="color:${t.amount<0?'var(--bad)':'var(--good)'}">${fmt(t.amount)}</td>
+      <td>${t.allocated?`<span class="pill paid">${esc(Views._accLabel(t.account))}</span>`:`<span class="pill over">Unallocated</span>`}</td>
+      <td class="r">${t.allocated?"":`<button class="btn sm" onclick="Forms.allocate('${t.id}')">Allocate</button>`}</td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="empty">No bank lines imported yet.</div>`}`;
+  },
+
+  /* ---- Chart of accounts ---- */
+  accounts(){
+    const other=App.branch==="RB"?"VV":"RB";
+    if(App.needSetup()) return Views._setupBanner()
+      + (branchAccounts(other).length?`<div class="banner">Or start from the <b>${App.branches[other]}</b> chart: <button class="btn sm" onclick="Actions.copyChart('${other}')">Copy ${App.branches[other]} chart</button></div>`:"");
+    const accs=branchAccounts().sort((a,b)=>a.code.localeCompare(b.code));
+    const tb=Ledger.trialBalance();
+    const missing=branchAccounts(other).filter(o=>!accs.some(a=>a.code===o.code)).length;
+    return Views._branchHead(accs.length+" accounts · separate from "+App.branches[other])+`<div class="toolbar"><button class="btn p" onclick="Forms.account()">+ New ${App.branches[App.branch]} account</button>
+      ${missing?`<button class="btn" onclick="Actions.copyChart('${other}')">Add ${missing} account${missing>1?"s":""} that ${App.branches[other]} has</button>`:""}</div>
+    <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Account</th><th>Type</th><th class="r">Balance</th><th></th></tr></thead><tbody>
+    ${accs.map(a=>`<tr><td>${esc(a.code)}</td><td>${esc(a.name)}</td><td><span class="muted">${a.type}</span></td>
+      <td class="r">${fmt((tb[a.code]||{}).balance||0)}</td>
+      <td class="r"><button class="btn sm" onclick="Forms.account('${a.id}')">Edit</button></td></tr>`).join("")}
+    </tbody></table></div>`;
+  },
+
+
+  /* ---- Journals ---- */
+  journals(){
+    const js=Store.all("journals").filter(j=>inScope(j)).sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,300);
+    return Views._scopeSel()+`<div class="toolbar"><button class="btn p" onclick="Forms.journal()">+ Manual journal</button></div>
+    ${js.length?`<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Ref</th><th>Memo</th><th>Source</th><th>Branch</th><th class="r">Amount</th></tr></thead><tbody>
+    ${js.map(j=>{const amt=money((j.lines||[]).reduce((s,l)=>s+(+l.debit||0),0));return `<tr onclick="Forms.viewJournal('${j.id}')" style="cursor:pointer">
+      <td>${esc(j.date)}</td><td>${esc(j.ref||"")}</td><td>${esc(j.memo||"")}</td>
+      <td><span class="muted">${esc(j.source||"manual")}</span></td><td>${App.branches[j.branch]||j.branch||""}</td><td class="r">${fmt(amt)}</td></tr>`;}).join("")}
+    </tbody></table></div>`:`<div class="empty">No journals yet.</div>`}`;
+  },
+
+  /* ---- Projects ---- */
+  projects(){
+    const ps=Store.all("projects").sort((a,b)=>a.name.localeCompare(b.name));
+    return `<div class="toolbar"><button class="btn p" onclick="Forms.project()">+ New project</button></div>
+    ${ps.length?`<div class="row">${ps.map(p=>{
+      const r=Views._projPnl(p.id);
+      return `<div class="card" style="flex:1;min-width:260px">
+        <div style="display:flex;justify-content:space-between"><h3 style="margin:0">${esc(p.name)}</h3>
+        <span class="pill ${p.status==='closed'?'over':'inv'}">${p.status||'open'}</span></div>
+        <div class="muted" style="margin:4px 0 10px">${esc(p.customer||"")}</div>
+        <div class="totbox" style="max-width:none;margin:0">
+          <div class="tr"><span>Income</span><b>${fmt(r.income)}</b></div>
+          ${can("seeCost")?`<div class="tr"><span>Costs</span><b>${fmt(r.cost)}</b></div>`:""}
+          <div class="tr g" style="${can("seeCost")?"":"display:none"}"><span>Profit — combined</span><b style="color:${r.profit>=0?'var(--good)':'var(--bad)'}">${fmt(r.profit)}</b></div>
+          ${!can("seeCost")?"":Object.entries(App.branches).filter(([k])=>can("br_"+k)).map(([k,v])=>{const x=Views._projPnl(p.id,k);return `<div class="tr muted" style="font-size:12px"><span>${v}</span><span>${fmt(x.income)} in · ${fmt(x.cost)} out · <b>${fmt(x.profit)}</b></span></div>`;}).join("")}
+        </div>
+        <button class="btn sm" style="margin-top:10px" onclick="Forms.project('${p.id}')">Edit</button>
+      </div>`;}).join("")}</div>`:`<div class="empty">No projects yet. Link invoices, bills and payments to a project to track its profit.</div>`}`;
+  },
+  _projPnl(pid,b){
+    let income=0,cost=0;
+    Store.all("journals").forEach(j=>{ if(j.projectId!==pid) return; if(b && !inBranch(j,b)) return;
+      (j.lines||[]).forEach(l=>{ const a=Ledger.accByCode(l.account,recBranch(j)); if(!a) return;
+        if(a.type==="Income") income+=money((l.credit||0)-(l.debit||0));
+        if(a.type==="Expense") cost+=money((l.debit||0)-(l.credit||0));
+      });});
+    return {income,cost,profit:money(income-cost)};
+  },
+
+  /* ---- Inventory ---- */
+  inventory(){
+    const items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
+    const br=Object.entries(App.branches).filter(([k])=>can("br_"+k));
+    const sc=scope();
+    const valOf=i=>money(qtyOf(i,sc)*(+i.cost||0));
+    const totVal=money(items.reduce((x,i)=>x+valOf(i),0));
+    return Views._scopeSel()+`<div class="banner">Every item carries 6 prices (excl VAT), worked out from cost by ${Pricing().basis==="margin"?"margin":"markup"}: ${Pricing().labels.map((lb,l)=>`${esc(lb)} ${isNum(Pricing().pcts[l])?Pricing().pcts[l]+"%":"—"}`).join(" · ")}. Change the defaults under Setup. Each branch keeps its own stock count.</div>
+    <div class="kpis" style="margin-bottom:14px">
+      ${!can("seeCost")?"":br.filter(([k])=>can("br_"+k)).map(([k,v])=>`<div class="kpi"><div class="l">Stock value — ${v}</div><div class="v">${fmt(items.reduce((x,i)=>x+qtyOf(i,k)*(+i.cost||0),0))}</div></div>`).join("")}
+      ${can("seeCost")&&allowedBranches().length>1?`<div class="kpi"><div class="l">Stock value — combined</div><div class="v">${fmt(items.reduce((x,i)=>x+qtyOf(i,"ALL")*(+i.cost||0),0))}</div></div>`:""}
+    </div>
+    <div class="toolbar"><button class="btn p" onclick="Forms.item()">+ New stock item</button>
+      ${can("transfer")?`<button class="btn" onclick="Forms.transfer()">⇄ Transfer between branches</button>`:""}
+      <input class="search" placeholder="Search…" oninput="Views._tblFilter(this,'iRows')"></div>
+    ${items.length?`<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Description</th>${can("seeCost")?'<th class="r">Cost</th>':''}<th>Prices (excl VAT)</th>
+      ${br.map(([k,v])=>`<th class="r" style="${sc===k?'color:var(--brand)':''}">${v}</th>`).join("")}<th class="r" style="${sc==='ALL'?'color:var(--brand)':''}">Total</th>${can("seeCost")?`<th class="r">Value (${sc==="ALL"?"combined":App.branches[sc]})</th>`:""}<th></th></tr></thead><tbody id="iRows">
+    ${items.map(i=>`<tr data-s="${esc((i.name+(i.code||"")).toLowerCase())}"><td>${esc(i.code||"")}</td><td>${esc(i.name)}</td>
+      ${can("seeCost")?`<td class="r">${fmt(i.cost)}</td>`:""}<td>${Views._priceStack(i)}</td>
+      ${br.map(([k])=>{const q=qtyOf(i,k);return `<td class="r" style="${q<0?'color:var(--bad)':''}">${q}</td>`;}).join("")}
+      <td class="r"><b>${br.reduce((x,[k])=>x+qtyOf(i,k),0)}</b></td>${can("seeCost")?`<td class="r">${fmt(valOf(i))}</td>`:""}
+      <td class="r"><button class="btn sm" onclick="Forms.item('${i.id}')">Edit</button></td></tr>`).join("")}
+      ${can("seeCost")?`<tr style="font-weight:700"><td></td><td>Total</td><td colspan="${2+br.length+1}"></td><td class="r">${fmt(totVal)}</td><td></td></tr>`:""}
+    </tbody></table></div>`:`<div class="empty">No stock items yet.</div>`}`+Views._transfers();
+  },
+  _transfers(){
+    const sc=scope();
+    const ts=Store.all("transfers").filter(t=>sc==="ALL"||t.from===sc||t.to===sc).sort((a,b)=>(b.no||"").localeCompare(a.no||"")).slice(0,30);
+    if(!ts.length) return "";
+    return `<div class="card" style="margin-top:16px"><h3>Recent transfers</h3><div class="tbl-wrap"><table><thead><tr><th>No.</th><th>Date</th><th>From → To</th><th>Items</th><th class="r">Value at cost</th></tr></thead><tbody>
+      ${ts.map(t=>`<tr><td>${esc(t.no)}</td><td>${esc(t.date)}</td><td>${App.branches[t.from]} → ${App.branches[t.to]}</td>
+        <td class="muted">${(t.lines||[]).map(l=>l.qty+" × "+esc(l.name)).join(", ")}</td><td class="r">${fmt(t.value)}</td></tr>`).join("")}
+    </tbody></table></div></div>`;
+  },
+
+
+  /* ---- VAT report ---- */
+  vat(){
+    const sc=App.rscope||App.branch;
+    const out=-Ledger.accountBalance(ACC.vatOut,null,sc), inp=Ledger.accountBalance(ACC.vatIn,null,sc);
+    const net=money(out-inp);
+    const vno = sc==="ALL" ? Object.keys(App.branches).map(b=>App.branches[b]+": "+(Company(b).vat||"—")).join(" · ") : (Company(sc).vat||"not set — add it under Setup");
+    return Views._scopeSel()+`<div class="card"><h3>VAT 201 summary (to date) — ${sc==="ALL"?"both branches":App.branches[sc]}</h3>
+      <div class="totbox" style="max-width:none;margin:0">
+        <div class="tr"><span>Output VAT — charged on sales</span><b>${fmt(out)}</b></div>
+        <div class="tr"><span>Input VAT — paid on purchases</span><b>${fmt(inp)}</b></div>
+        <div class="tr g"><span>${net>=0?'Payable to SARS':'Refund due from SARS'}</span><b>${fmt(Math.abs(net))}</b></div>
+      </div>
+      <p class="muted" style="margin-top:14px">VAT No. ${esc(vno)}. Standard rate 15%. Figures are cumulative.</p>
+    </div>`;
+  },
+  _scopeSel(){
+    const sc=App.rscope||App.branch;
+    const ab=allowedBranches();
+    const o=[...ab.map(k=>[k,App.branches[k]]), ...(ab.length>1?[["ALL","Both branches — combined"]]:[])];
+    if(o.length<2) return "";
+    const note = sc===App.branch ? "" : `<span class="muted" style="font-size:12px">Viewing ${sc==="ALL"?"both branches":App.branches[sc]} · new entries still go to <b>${App.branches[App.branch]}</b></span>`;
+    return `<div class="toolbar"><label style="margin:0">Show:</label><select style="max-width:260px" onchange="App.rscope=this.value;App.render()">
+      ${o.map(([k,v])=>`<option value="${k}" ${sc===k?"selected":""}>${v}</option>`).join("")}</select>${note}</div>`;
+  },
+
+  /* ---- Financial reports ---- */
+  reports(){
+    const sc=App.rscope||App.branch;
+    const tb=Ledger.trialBalance(null,sc);
+    const by=t=>Object.values(tb).filter(a=>a.type===t).sort((a,b)=>a.code.localeCompare(b.code));
+    const sum=t=>money(by(t).reduce((s,a)=>s+a.balance,0));
+    const income=-sum("Income"), expense=sum("Expense"), profit=money(income-expense);
+    const totD=money(Object.values(tb).reduce((s,a)=>s+(a.balance>0?a.balance:0),0));
+    const totC=money(Object.values(tb).reduce((s,a)=>s+(a.balance<0?-a.balance:0),0));
+    const line=a=>`<tr><td>${a.code}</td><td>${esc(a.name)}</td><td class="r">${a.balance>0?fmtn(a.balance):""}</td><td class="r">${a.balance<0?fmtn(-a.balance):""}</td></tr>`;
+    return Views._scopeSel()+`<div class="tabs">
+      <div class="t on" onclick="Views._rtab(this,'tb')">Trial Balance</div>
+      <div class="t" onclick="Views._rtab(this,'is')">Income Statement</div>
+      <div class="t" onclick="Views._rtab(this,'bs')">Balance Sheet</div>
+    </div>
+    <div id="tb" class="rpane">
+      <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Account</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>
+      ${Object.values(tb).sort((a,b)=>a.code.localeCompare(b.code)).map(line).join("")}
+      <tr style="font-weight:700"><td></td><td>TOTAL</td><td class="r">${fmtn(totD)}</td><td class="r">${fmtn(totC)}</td></tr>
+      </tbody></table></div>
+    </div>
+    <div id="is" class="rpane" style="display:none">
+      <div class="card"><h3>Income</h3><table>${by("Income").map(a=>`<tr><td>${esc(a.name)}</td><td class="r">${fmt(-a.balance)}</td></tr>`).join("")}
+        <tr style="font-weight:700"><td>Total income</td><td class="r">${fmt(income)}</td></tr></table></div>
+      <div class="card"><h3>Expenses</h3><table>${by("Expense").map(a=>`<tr><td>${esc(a.name)}</td><td class="r">${fmt(a.balance)}</td></tr>`).join("")}
+        <tr style="font-weight:700"><td>Total expenses</td><td class="r">${fmt(expense)}</td></tr></table></div>
+      <div class="kpi"><div class="l">Net profit</div><div class="v ${profit>=0?'good':'bad'}">${fmt(profit)}</div></div>
+    </div>
+    <div id="bs" class="rpane" style="display:none">
+      <div class="card"><h3>Assets</h3><table>${by("Asset").map(a=>`<tr><td>${esc(a.name)}</td><td class="r">${fmt(a.balance)}</td></tr>`).join("")}
+        <tr style="font-weight:700"><td>Total assets</td><td class="r">${fmt(sum("Asset"))}</td></tr></table></div>
+      <div class="card"><h3>Liabilities</h3><table>${by("Liability").map(a=>`<tr><td>${esc(a.name)}</td><td class="r">${fmt(-a.balance)}</td></tr>`).join("")}
+        <tr style="font-weight:700"><td>Total liabilities</td><td class="r">${fmt(-sum("Liability"))}</td></tr></table></div>
+      <div class="card"><h3>Equity</h3><table>${by("Equity").map(a=>`<tr><td>${esc(a.name)}</td><td class="r">${fmt(-a.balance)}</td></tr>`).join("")}
+        <tr><td>Current year profit</td><td class="r">${fmt(profit)}</td></tr>
+        <tr style="font-weight:700"><td>Total equity</td><td class="r">${fmt(-sum("Equity")+profit)}</td></tr></table></div>
+    </div>`;
+  },
+  _rtab(el,id){ document.querySelectorAll(".tabs .t").forEach(t=>t.classList.remove("on")); el.classList.add("on");
+    document.querySelectorAll(".rpane").forEach(p=>p.style.display="none"); document.getElementById(id).style.display=""; },
+
+  /* ---- Users & access ---- */
+  users(){
+    const ago=t=>{ if(!t) return "never signed in"; const m=Math.round((Date.now()-Date.parse(t))/60000);
+      return m<2?"active now":m<60?m+" min ago":m<1440?Math.round(m/60)+" h ago":new Date(t).toLocaleDateString("en-ZA"); };
+    const nonBr=ALL_PERMS.filter(k=>!k.startsWith("br_"));
+    const rows=Object.values(Store.profiles).sort((a,b)=>(b.is_owner-a.is_owner)||(b.active-a.active)||(a.full_name||"").localeCompare(b.full_name||""));
+    const pend=Store.invites||[];
+    return `<div class="banner">Each person gets their own <b>username and password</b> for Mecca Books — no claude.ai account needed. Tick exactly what they may do. The owner always has full access.</div>
+    <div class="toolbar"><button class="btn p" onclick="Forms.addUser()">+ Add user</button>
+      <span class="muted">${rows.filter(r=>r.active).length} active logins</span></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Last seen</th><th>Branches</th><th>Access</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>{ const pe=r.perms||{}, n=nonBr.filter(k=>pe[k]).length;
+      const br=Object.keys(App.branches).filter(b=>pe["br_"+b]).map(b=>App.branches[b]);
+      return `<tr style="${r.active?"":"opacity:.55"}"><td><b>${esc(r.full_name||r.username)}</b>${r.id===Store.uid?' <span class="muted">(you)</span>':""}</td>
+      <td class="muted">${esc(r.username)}</td><td class="muted">${ago(r.last_seen)}</td>
+      <td>${r.is_owner?"All":br.length?esc(br.join(", ")):'<span class="pill over">None</span>'}</td>
+      <td>${r.is_owner?'<span class="pill paid">Owner — full access</span>':!r.active?'<span class="pill over">Login disabled</span>':n?`<span class="muted">${n} of ${nonBr.length} rights</span>`:'<span class="pill over">No access yet</span>'}</td>
+      <td class="r" style="white-space:nowrap">${r.is_owner||r.id===Store.uid?"":`
+        <button class="btn sm p" onclick="Forms.access('${r.id}')">Set access</button>
+        <button class="btn sm" onclick="Forms.resetPw('${r.id}')">Reset password</button>
+        <button class="btn sm ${r.active?"d":""}" onclick="Actions.toggleLogin('${r.id}')">${r.active?"Disable":"Enable"}</button>`}</td></tr>`;}).join("")}
+    ${pend.map(v=>`<tr><td><b>${esc(v.full_name||v.username)}</b></td><td class="muted">${esc(v.username)}</td><td colspan="3"><span class="pill due">Invited — login not finished</span></td>
+      <td class="r"><button class="btn sm d" onclick="Actions.cancelInvite('${esc(v.username)}')">Cancel</button></td></tr>`).join("")}
+    </tbody></table></div>
+    <p class="muted" style="font-size:12px;margin-top:10px">Disabling a login stops that person immediately on every device; their history stays in the audit trail.</p>`;
+  },
+
+  /* ---- Audit trail ---- */
+  audit(){
+    if(!Store._loaded.has("audit")){ Store.loadAudit(); return `<div class="empty">Loading audit trail…</div>`; }
+
+    const NOUN={access:"User login / access",accounts:"Account",customers:"Customer",suppliers:"Supplier",items:"Stock item",documents:"Document",journals:"Journal",
+      payments:"Payment / receipt",projects:"Project",banktxns:"Bank line",bankrules:"Bank rule",cashups:"Cash-up",settings:"Settings",transfers:"Stock transfer"};
+    const sc=scope(), fu=App.auditUser||"", fa=App.auditAction||"", q=(App.auditQ||"").toLowerCase();
+    let rows=Store.all("audit").sort((a,b)=>b.at-a.at);
+    const users=[...new Set(rows.map(r=>r.by))];
+    rows=rows.filter(r=>(sc==="ALL"||!r.branch||r.branch===sc)&&(!fu||r.by===fu)&&(!fa||r.action===fa)
+      &&(!q||((r.label||"")+" "+(NOUN[r.coll]||r.coll)).toLowerCase().includes(q))).slice(0,500);
+    const act={create:'<span class="pill paid">Created</span>',edit:'<span class="pill due">Edited</span>',delete:'<span class="pill over">Deleted</span>'};
+    const when=t=>{const d=new Date(t);return d.toLocaleDateString("en-ZA")+" "+d.toLocaleTimeString("en-ZA",{hour:"2-digit",minute:"2-digit",second:"2-digit"});};
+    return Views._scopeSel()+`<div class="toolbar">
+      <select style="max-width:220px" onchange="App.auditUser=this.value;App.render()"><option value="">All users</option>
+        ${users.map(u=>`<option value="${esc(u)}" ${u===fu?"selected":""} data-uid="${esc(u)}">${esc(Names.label(u))}</option>`).join("")}</select>
+      <select style="max-width:160px" onchange="App.auditAction=this.value;App.render()"><option value="">All actions</option>
+        ${["create","edit","delete"].map(a=>`<option value="${a}" ${a===fa?"selected":""}>${a==="create"?"Created":a==="edit"?"Edited":"Deleted"}</option>`).join("")}</select>
+      <input class="search" placeholder="Search…" value="${esc(App.auditQ||"")}" onchange="App.auditQ=this.value;App.render()">
+      <span class="muted">${rows.length} entries</span><button class="btn sm" onclick="Store.loadAudit()">↻ Refresh</button></div>
+    ${rows.length?`<div class="tbl-wrap"><table><thead><tr><th>When</th><th>User</th><th>Branch</th><th>Action</th><th>What</th><th class="r">Amount</th><th>Changed</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td style="white-space:nowrap">${when(r.at)}</td><td>${Names.tag(r.by)}</td><td class="muted">${r.branch?App.branches[r.branch]||r.branch:"Both"}</td>
+      <td>${act[r.action]||esc(r.action)}</td><td><b>${esc(NOUN[r.coll]||r.coll)}</b> ${esc(r.label||"")}</td>
+      <td class="r">${r.amount!=null?fmt(r.amount):""}</td><td class="muted" style="font-size:12px">${esc((r.changed||[]).join(", "))}</td></tr>`).join("")}
+    </tbody></table></div>`:`<div class="empty">No activity recorded yet.</div>`}
+    <p class="muted" style="font-size:12px;margin-top:10px">Entries are written by the database itself under each person's own login — nobody, including staff with full access, can edit or remove them.</p>`;
+  },
+
+  /* ---- Setup ---- */
+  _pricingCard(){
+    const P=Pricing();
+    return `<div class="card"><h3>Price levels (both branches)</h3>
+      <div class="f" style="max-width:420px"><label>Work out selling prices from cost using</label>
+        <select id="pp_basis" onchange="Views._ppExample()">
+          <option value="margin" ${P.basis==="margin"?"selected":""}>Margin — % of the selling price (cost ÷ (1 − %))</option>
+          <option value="markup" ${P.basis==="markup"?"selected":""}>Markup — % added to cost (cost × (1 + %))</option></select></div>
+      <table class="linetbl" style="max-width:620px"><thead><tr><th>#</th><th>Name</th><th style="width:110px">Default %</th><th class="r" style="width:150px">R100 cost sells at</th></tr></thead><tbody>
+      ${P.labels.map((lb,l)=>`<tr><td class="muted">${l+1}</td>
+        <td><input id="pp_lbl_${l}" value="${esc(lb)}"></td>
+        <td><input id="pp_pct_${l}" type="number" step="0.01" value="${isNum(P.pcts[l])?P.pcts[l]:""}" placeholder="not set" oninput="Views._ppExample()"></td>
+        <td class="r" id="pp_ex_${l}"></td></tr>`).join("")}
+      </tbody></table>
+      <div class="grid2" style="max-width:620px;margin-top:12px">
+        <div class="f"><label>Till (POS) sells at</label><select id="pp_pos">${P.labels.map((lb,l)=>`<option value="${l}" ${l===P.posLevel?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>
+        <div class="f"><label>New customers default to</label><select id="pp_cust">${P.labels.map((lb,l)=>`<option value="${l}" ${l===P.custLevel?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn p" onclick="Actions.savePricing()">Save price levels</button>
+        <button class="btn" onclick="Actions.repriceAsk()">Apply these % to all stock items…</button>
+      </div>
+      <p class="muted" style="font-size:12px;margin-top:10px">New items and scanned supplier invoices use these defaults. Each item can still have its own % per level (edit the item).</p>
+    </div>`;
+  },
+  _ppExample(){
+    const b=document.getElementById("pp_basis").value;
+    for(let l=0;l<6;l++){ const v=document.getElementById("pp_pct_"+l).value; const pr=v!==""?priceFrom(100,+v,b):null;
+      document.getElementById("pp_ex_"+l).textContent = pr!=null ? fmt(pr)+" excl" : "—"; }
+  },
+  setup(){
+    const c=Company();
+    const rb=App.branch==="RB";
+    return Views._branchHead("switch branch in the side menu to edit the other branch")+`<div class="card"><h3>${App.branches[App.branch]} details (printed on this branch's quotes & invoices)</h3>
+      <div class="grid2">
+        <div class="f"><label>Trading name</label><input id="s_name" value="${esc(c.name!=null?c.name:(rb?'The Security Mecca CC':''))}"></div>
+        <div class="f"><label>Registration no.</label><input id="s_reg" value="${esc(c.reg!=null?c.reg:(rb?'2005/140640/23':''))}"></div>
+        <div class="f"><label>VAT no.</label><input id="s_vat" value="${esc(c.vat!=null?c.vat:(rb?'4430 225 260':''))}"></div>
+        <div class="f"><label>Telephone</label><input id="s_tel" value="${esc(c.tel!=null?c.tel:(rb?'035 789 4157':''))}"></div>
+        <div class="f"><label>Cell</label><input id="s_cell" value="${esc(c.cell!=null?c.cell:(rb?'082 817 5717':''))}"></div>
+        <div class="f"><label>Email</label><input id="s_email" value="${esc(c.email||'')}"></div>
+      </div>
+      <div class="f"><label>Address</label><textarea id="s_addr" rows="2">${esc(c.addr!=null?c.addr:(rb?'Shop 1 Hotline Centre, 41 Bullion Boulevard, Richards Bay\\nP.O Box 1185, Richards Bay Central, KZN 3900':''))}</textarea></div>
+      <div class="f"><label>Banking details (printed on invoices)</label><textarea id="s_bank" rows="2">${esc(c.bank||'')}</textarea></div>
+      <button class="btn p" onclick="Actions.saveCompany()">Save ${App.branches[App.branch]} details</button>
+    </div>
+    ${Views._pricingCard()}
+    <div class="card"><h3>Sign-in security</h3>
+      <div class="f" style="max-width:320px"><label>Sign out automatically after this many idle minutes (0 = never)</label>
+        <input id="sec_idle" type="number" min="0" value="${(Store.get("settings","security")||{}).idleMinutes ?? 30}"></div>
+      <button class="btn p" onclick="Actions.saveSecurity()">Save</button>
+      <p class="muted" style="font-size:12px;margin-top:8px">Protects shared till PCs: if someone walks away, the next person can't work under their name. Logins and access are managed under <b>Users &amp; Access</b>.</p>
+    </div>
+    <div class="card"><h3>Data</h3>
+      <button class="btn" onclick="Actions.exportJSON()">Export all data (backup)</button>
+      <button class="btn" onclick="Actions.exportCSV('journals')">Export journals (CSV)</button>
+    </div>`;
+  }
+};
+
+/* ============================================================
+   FORMS
+   ============================================================ */
+const Forms = {
+  customer(id){
+    const c=id?Store.get("customers",id):{};
+    const cb=id?recBranch(c):App.branch, ob=Object.keys(App.branches).find(k=>k!==cb);
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} customer · ${App.branches[cb]}</h2>
+      <div class="grid2">
+        <div class="f"><label>Name *</label><input id="c_name" value="${esc(c.name||'')}"></div>
+        <div class="f"><label>Contact person</label><input id="c_contact" value="${esc(c.contact||'')}"></div>
+        <div class="f"><label>Phone</label><input id="c_phone" value="${esc(c.phone||'')}"></div>
+        <div class="f"><label>Email</label><input id="c_email" value="${esc(c.email||'')}"></div>
+        <div class="f"><label>VAT no.</label><input id="c_vat" value="${esc(c.vat||'')}"></div>
+        <div class="f"><label>Terms (days)</label><input id="c_terms" type="number" value="${c.terms!=null?c.terms:30}"></div>
+        <div class="f"><label>Price level for this customer</label><select id="c_level">
+          ${Pricing().labels.map((lb,l)=>`<option value="${l}" ${l===(isNum(c.priceLevel)?+c.priceLevel:Pricing().custLevel)?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>
+      </div>
+      <div class="f"><label>Address</label><textarea id="c_addr" rows="2">${esc(c.addr||'')}</textarea></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="Actions.saveCustomer('${id||''}')">Save</button>
+      ${id?`<button class="btn" onclick="Actions.copyParty('customers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
+      ${id?`<button class="btn d" onclick="Actions.delParty('customers','${id}')">Delete</button>`:''}</div>`);
+  },
+  supplier(id){
+    const c=id?Store.get("suppliers",id):{};
+    const cb=id?recBranch(c):App.branch, ob=Object.keys(App.branches).find(k=>k!==cb);
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} supplier · ${App.branches[cb]}</h2>
+      <div class="grid2">
+        <div class="f"><label>Name *</label><input id="su_name" value="${esc(c.name||'')}"></div>
+        <div class="f"><label>Contact person</label><input id="su_contact" value="${esc(c.contact||'')}"></div>
+        <div class="f"><label>Phone</label><input id="su_phone" value="${esc(c.phone||'')}"></div>
+        <div class="f"><label>Account no.</label><input id="su_acc" value="${esc(c.acc||'')}"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="Actions.saveSupplier('${id||''}')">Save</button>
+      ${id?`<button class="btn" onclick="Actions.copyParty('suppliers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
+      ${id?`<button class="btn d" onclick="Actions.delParty('suppliers','${id}')">Delete</button>`:''}</div>`);
+  },
+  item(id){
+    const i=id?Store.get("items",id):{pcts:Pricing().pcts.slice()};
+    const P=Pricing(), pc=pctsOf(i), pr=pricesOf(i);
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} stock item</h2>
+      <div class="grid2">
+        <div class="f"><label>Item code</label><input id="i_code" value="${esc(i.code||'')}"></div>
+        <div class="f"><label>Description *</label><input id="i_name" value="${esc(i.name||'')}"></div>
+        ${can("seeCost")?`<div class="f"><label>Cost price (excl VAT)</label><input id="i_cost" type="number" step="0.01" value="${i.cost||0}" oninput="Forms._recalcItem()"></div>`:""}
+        ${Object.entries(App.branches).filter(([k])=>can("br_"+k)).map(([k,v])=>`<div class="f"><label>On hand — ${v}</label><input id="i_qty_${k}" type="number" value="${qtyOf(i,k)}"></div>`).join("")}
+        <div class="f"><label>Bin / location</label><input id="i_bin" value="${esc(i.bin||'')}"></div>
+      </div>
+      <h3 style="margin:6px 0 8px;font-size:13px;color:var(--muted)">SELLING PRICES${can("seeCost")?` · % is ${P.basis==="margin"?"margin on selling price":"markup on cost"}`:""}${can("editPrices")?"":" · 🔒 read-only for you"}</h3>
+      <table class="linetbl"><thead><tr><th>Price level</th>${can("seeCost")?`<th style="width:90px">${P.basis==="margin"?"Margin":"Markup"} %</th>`:""}<th style="width:120px">Excl VAT</th><th class="r" style="width:110px">Incl VAT</th></tr></thead><tbody>
+      ${P.labels.map((lb,l)=>`<tr><td><b>${esc(lb)}</b></td>
+        ${can("seeCost")?`<td><input type="number" step="0.01" id="i_pct_${l}" value="${isNum(pc[l])?pc[l]:''}" placeholder="—" oninput="Forms._pctChanged(${l})" ${can("editPrices")?"":"disabled"}></td>`:""}
+        <td><input type="number" step="0.01" id="i_pr_${l}" value="${isNum(pr[l])?pr[l]:''}" placeholder="—" oninput="Forms._priceChanged(${l})" ${can("editPrices")?"":"disabled"}></td>
+        <td class="r muted" id="i_inc_${l}">${isNum(pr[l])?fmt(pr[l]*(1+VAT_RATE)):'—'}</td></tr>`).join("")}
+      </tbody></table>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn p" onclick="Actions.saveItem('${id||''}')">Save</button>
+      ${id?`<button class="btn d" onclick="Actions.delRec('items','${id}')">Delete</button>`:''}</div>`);
+  },
+  _incl(l){ const v=document.getElementById("i_pr_"+l).value; document.getElementById("i_inc_"+l).textContent=isNum(v)&&v!==""?fmt(+v*(1+VAT_RATE)):"—"; },
+  _recalcItem(){ const cost=+document.getElementById("i_cost").value||0;
+    for(let l=0;l<6;l++){ const pe=document.getElementById("i_pct_"+l); if(!pe) continue; const pc=pe.value; if(pc!==""){ const v=priceFrom(cost,+pc); document.getElementById("i_pr_"+l).value=v!=null?v:""; } Forms._incl(l); } },
+  _pctChanged(l){ const cost=+document.getElementById("i_cost").value||0, pc=document.getElementById("i_pct_"+l).value;
+    if(pc!==""){ const v=priceFrom(cost,+pc); document.getElementById("i_pr_"+l).value=v!=null?v:""; } Forms._incl(l); },
+  _priceChanged(l){ const ce=document.getElementById("i_cost"), pe=document.getElementById("i_pct_"+l), pr=document.getElementById("i_pr_"+l).value;
+    if(ce&&pe){ const pc=pr!==""?pctFrom(+ce.value||0,+pr):null; pe.value=pc!=null?pc:""; } Forms._incl(l); },
+
+  project(id){
+    const p=id?Store.get("projects",id):{status:"open"};
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} project</h2>
+      <div class="f"><label>Project name *</label><input id="p_name" value="${esc(p.name||'')}"></div>
+      <div class="grid2">
+        <div class="f"><label>Customer / site</label><input id="p_customer" value="${esc(p.customer||'')}"></div>
+        <div class="f"><label>Status</label><select id="p_status"><option value="open" ${p.status==='open'?'selected':''}>Open</option><option value="closed" ${p.status==='closed'?'selected':''}>Closed</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px"><button class="btn p" onclick="Actions.saveProject('${id||''}')">Save</button>
+      ${id?`<button class="btn d" onclick="Actions.delRec('projects','${id}')">Delete</button>`:''}</div>`);
+  },
+
+  account(id){
+    const a=id?Store.get("accounts",id):{type:"Expense"};
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} account</h2>
+      <div class="grid3">
+        <div class="f"><label>Code *</label><input id="a_code" value="${esc(a.code||'')}"></div>
+        <div class="f" style="grid-column:span 2"><label>Name *</label><input id="a_name" value="${esc(a.name||'')}"></div>
+      </div>
+      <div class="f"><label>Type</label><select id="a_type">${["Asset","Liability","Equity","Income","Expense"].map(t=>`<option ${a.type===t?'selected':''}>${t}</option>`).join("")}</select></div>
+      <div style="display:flex;gap:8px"><button class="btn p" onclick="Actions.saveAccount('${id||''}')">Save</button>
+      ${id?`<button class="btn d" onclick="Actions.delAccount('${id}')">Delete</button>`:''}</div>`);
+  },
+
+  /* ---- Document (quote / invoice) ---- */
+  document(id){
+    const d=id?Store.get("documents",id):{type:"quote",date:today(),lines:[{}],branch:App.branch};
+    const db=d.branch||App.branch;
+    const custs=Store.all("customers").filter(c=>inBranch(c,db)).sort((a,b)=>a.name.localeCompare(b.name));
+    Forms._doc=JSON.parse(JSON.stringify(d)); Forms._doc.lines=Forms._doc.lines&&Forms._doc.lines.length?Forms._doc.lines:[{}];
+    modal(`<span class="close" onclick="closeModal()">✕</span>
+      <h2>${id?esc(d.no||'Document'):'New document'} ${d.type==='invoice'?'<span class="pill inv">Invoice</span>':'<span class="pill q">Quote</span>'}</h2>
+      <div class="grid3">
+        <div class="f"><label>Type</label><select id="d_type" ${d.type==='invoice'?'disabled':''}><option value="quote" ${d.type==='quote'?'selected':''}>Quote</option><option value="invoice" ${d.type==='invoice'?'selected':''}>Invoice</option></select></div>
+        <div class="f"><label>Date</label><input id="d_date" type="date" value="${d.date||today()}"></div>
+        <div class="f"><label>Branch</label><select id="d_branch" ${id?'disabled':''} onchange="Forms.docBranch(this.value)">${Object.entries(App.branches).map(([k,v])=>`<option value="${k}" ${(d.branch||App.branch)===k?'selected':''}>${v}</option>`).join("")}</select></div>
+      </div>
+      <div class="grid2">
+        <div class="f"><label>Customer * <span class="muted" id="d_lvl"></span></label><select id="d_cust" onchange="Forms._showLvl()"><option value="">— select —</option>${custs.map(c=>`<option value="${c.id}" ${d.customerId===c.id?'selected':''}>${esc(c.name)}</option>`).join("")}</select></div>
+        <div class="f"><label>Project</label><select id="d_project">${projectOptions(d.projectId)}</select></div>
+      </div>
+      <table class="linetbl"><thead><tr><th>Description</th><th style="width:90px">Qty</th><th style="width:110px">Unit price</th><th style="width:110px" class="r">Nett</th><th></th></tr></thead>
+      <tbody id="docLines"></tbody></table>
+      <button class="btn sm" onclick="Forms.docAddLine()">+ line</button>
+      <div class="totbox"><div class="tr"><span>Subtotal</span><span id="d_sub">R 0.00</span></div>
+        <div class="tr"><span>VAT 15%</span><span id="d_vat">R 0.00</span></div>
+        <div class="tr g"><span>TOTAL</span><span id="d_tot">R 0.00</span></div></div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn p" onclick="Actions.saveDocument('${id||''}')">Save</button>
+        ${d.type==='quote'?`<button class="btn g" onclick="Actions.convertToInvoice('${id||''}')">Save & convert to invoice</button>`:''}
+        ${id?`<button class="btn" onclick="Actions.printDoc('${id}')">Print / PDF</button>`:''}
+        ${id?`<button class="btn d" onclick="Actions.delRec('documents','${id}')">Delete</button>`:''}
+      </div>
+      ${id&&d._createdBy?`<div class="muted" style="font-size:12px;margin-top:10px">Created by ${Names.tag(d._createdBy)} ${d._createdAt?new Date(d._createdAt).toLocaleString("en-ZA"):""} · last changed by ${Names.tag(d._by)} ${d._at?new Date(d._at).toLocaleString("en-ZA"):""}</div>`:""}`,true);
+    Forms.docRenderLines(); Forms._showLvl();
+  },
+  _doc:null,
+  _showLvl(){ const el=document.getElementById("d_lvl"); if(el) el.textContent="· prices at "+Pricing().labels[Forms._docLevel()]; },
+  _docLevel(){ const c=Store.get("customers",(document.getElementById("d_cust")||{}).value); return c&&isNum(c.priceLevel)?+c.priceLevel:Pricing().custLevel; },
+  docBranch(b){
+    const custs=Store.all("customers").filter(c=>inBranch(c,b)).sort((x,y)=>x.name.localeCompare(y.name));
+    document.getElementById("d_cust").innerHTML=`<option value="">— select —</option>`+custs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  },
+  docRenderLines(){
+    const items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
+    const tb=document.getElementById("docLines");
+    tb.innerHTML=Forms._doc.lines.map((l,i)=>`<tr>
+      <td><input list="itemlist" value="${esc(l.desc||'')}" oninput="Forms.docLine(${i},'desc',this.value)" placeholder="Type or pick item"></td>
+      <td><input type="number" value="${l.qty!=null?l.qty:1}" oninput="Forms.docLine(${i},'qty',this.value)"></td>
+      <td><input type="number" step="0.01" value="${l.price!=null?l.price:''}" oninput="Forms.docLine(${i},'price',this.value)" ${l.itemId&&!can("editPrices")?"readonly title='Stock price - locked for your login'":""}></td>
+      <td class="r">${fmt((l.qty||0)*(l.price||0))}</td>
+      <td><span style="cursor:pointer;color:var(--bad)" onclick="Forms.docDelLine(${i})">✕</span></td></tr>`).join("")
+      +`<datalist id="itemlist">${items.map(i=>`<option value="${esc(i.name)}">`).join("")}</datalist>`;
+    Forms.docTotals();
+  },
+  docLine(i,field,val){
+    if(field==="price" && Forms._doc.lines[i].itemId && !can("editPrices")) return;
+    if(field==="desc"){ Forms._doc.lines[i].desc=val;
+      const it=Store.all("items").find(x=>x.name===val);
+      if(it && (Forms._doc.lines[i].price==null||Forms._doc.lines[i].price==="")){
+        const lv=Forms._docLevel(), pv=priceOf(it,lv);
+        if(pv==null) toast("No "+Pricing().labels[lv]+" price on "+it.name+" — enter it manually");
+        Forms._doc.lines[i].price=pv!=null?pv:""; Forms._doc.lines[i].itemId=it.id; Forms._doc.lines[i].code=it.code||""; Forms._doc.lines[i].level=lv;
+        Forms.docRenderLines(); return; }
+    } else Forms._doc.lines[i][field]=+val;
+    Forms.docTotals();
+    // update nett cell
+    const row=document.querySelectorAll("#docLines tr")[i]; if(row) row.children[3].textContent=fmt((Forms._doc.lines[i].qty||0)*(Forms._doc.lines[i].price||0));
+  },
+  docAddLine(){ Forms._doc.lines.push({qty:1}); Forms.docRenderLines(); },
+  docDelLine(i){ Forms._doc.lines.splice(i,1); if(!Forms._doc.lines.length)Forms._doc.lines=[{qty:1}]; Forms.docRenderLines(); },
+  docTotals(){ const sub=money(Forms._doc.lines.reduce((s,l)=>s+(l.qty||0)*(l.price||0),0));
+    const vat=money(sub*VAT_RATE);
+    document.getElementById("d_sub").textContent=fmt(sub);
+    document.getElementById("d_vat").textContent=fmt(vat);
+    document.getElementById("d_tot").textContent=fmt(sub+vat); },
+
+  /* ---- Supplier bill: 📷 photo + OCR, or manual ---- */
+  bill(){
+    const head=`<span class="close" onclick="closeModal()">✕</span><h2>Supplier bill</h2>`;
+    const b={type:"bill",date:today(),lines:[{}]};
+    const sups=Store.all("suppliers").filter(x=>inBranch(x)).sort((a,b)=>a.name.localeCompare(b.name));
+    modal(head+`
+      <div class="grid3">
+        <div class="f"><label>Supplier *</label><select id="b_sup"><option value="">—</option>${sups.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>
+        <div class="f"><label>Invoice ref</label><input id="b_ref" value="${esc(b.ref||'')}"></div>
+        <div class="f"><label>Date</label><input id="b_date" type="date" value="${b.date||today()}"></div>
+      </div>
+      <div class="grid2">
+        <div class="f"><label>Expense / stock account</label><select id="b_acc">${accountOptions(ACC.stock,["Asset","Expense"])}</select></div>
+        <div class="f"><label>Project</label><select id="b_project">${projectOptions()}</select></div>
+      </div>
+      <div class="grid2">
+        <div class="f"><label>Amount (excl VAT)</label><input id="b_amt" type="number" step="0.01" value="${b.sub||''}"></div>
+        <div class="f"><label>VAT</label><select id="b_vat"><option value="1">Add 15% VAT</option><option value="0">No VAT</option></select></div>
+      </div>
+      <div class="f"><label>Supplier's invoice (optional)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <label class="btn" style="cursor:pointer;display:inline-block;margin:0">📷 Take photo<input type="file" id="b_cam" accept="image/*" capture="environment" style="display:none" onchange="document.getElementById('b_fname').textContent=this.files[0]?this.files[0].name:''"></label>
+          <label class="btn" style="cursor:pointer;display:inline-block;margin:0">📎 Choose file<input type="file" id="b_file" accept="image/*,application/pdf" style="display:none" onchange="document.getElementById('b_fname').textContent=this.files[0]?this.files[0].name:''"></label>
+          <span class="muted" id="b_fname" style="font-size:12px"></span></div></div>
+      <button class="btn p" onclick="Actions.saveBill()">Save bill</button>`);
+  },
+
+  /* ---- 🔑 Access checkboxes for one user ---- */
+  _accGrid(pe){
+    const box=(k,t)=>`<label style="display:flex;gap:8px;align-items:center;margin:0;padding:5px 0;color:var(--txt);font-size:13.5px;cursor:pointer">
+      <input type="checkbox" class="acc_cb" data-k="${k}" style="width:auto" ${pe[k]?"checked":""}> ${esc(t)}</label>`;
+    return `<div class="toolbar" style="margin-bottom:6px"><span class="muted">Quick presets:</span>
+        ${Object.keys(PERM_PRESETS).map(n=>`<button class="btn sm" onclick="Forms.accPreset('${n}')">${n}</button>`).join("")}
+        <button class="btn sm" onclick="Forms.accPreset('')">Clear all</button></div>
+      <p class="muted" style="font-size:12px;margin:0 0 10px">Presets set the screens and rights only — tick the branches yourself.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px">
+      ${PERM_GROUPS.map(g=>`<div class="card" style="margin:0;padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0 0 6px">${esc(g.g)}</h3>
+          <a style="font-size:12px;cursor:pointer" onclick="Forms.accGroup(this)">all / none</a></div>
+        ${g.items.map(([k,t])=>box(k,t)).join("")}</div>`).join("")}
+      </div>`;
+  },
+  _accRead(){ const perms={}; document.querySelectorAll(".acc_cb").forEach(cb=>{ if(cb.checked) perms[cb.dataset.k]=true; }); return perms; },
+  addUser(){
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Add a user</h2>
+      <div class="grid3">
+        <div class="f"><label>Full name</label><input id="nu_name" placeholder="e.g. Sam Dlamini"></div>
+        <div class="f"><label>Username (for signing in)</label><input id="nu_user" placeholder="e.g. sam" autocapitalize="none"></div>
+        <div class="f"><label>Starting password (min 8)</label><input id="nu_pass" value="${Forms._tmpPw()}"></div>
+      </div>
+      <h3 style="margin:6px 0 8px;font-size:13px;color:var(--muted)">WHAT MAY THEY DO?</h3>
+      ${Forms._accGrid({})}
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn p" id="nu_btn" onclick="Actions.addUser()">Create login</button>
+        <button class="btn" onclick="closeModal()">Cancel</button></div>`,true);
+  },
+  _tmpPw(){ const c="abcdefghjkmnpqrstuvwxyz23456789"; let s=""; for(let i=0;i<8;i++) s+=c[Math.floor(Math.random()*c.length)]; return s.slice(0,4)+"-"+s.slice(4); },
+  resetPw(uid){
+    const p=Store.profiles[uid]||{};
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Reset password — ${esc(p.full_name||p.username)}</h2>
+      <div class="f"><label>New password (min 8)</label><input id="rp_pass" value="${Forms._tmpPw()}"></div>
+      <p class="muted" style="font-size:12px">Give this to ${esc(p.full_name||"them")} — they can change it after signing in.</p>
+      <button class="btn p" onclick="Actions.resetPw('${uid}')">Set new password</button>`);
+  },
+  access(uid){
+    const pe=permsOf(uid);
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Access for ${Names.tag(uid)}</h2>
+      ${Forms._accGrid(pe)}
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn p" onclick="Actions.saveAccess('${esc(uid)}')">Save access</button>
+        <button class="btn" onclick="closeModal()">Cancel</button></div>`,true);
+  },
+  accPreset(name){
+    const on=new Set(name?PERM_PRESETS[name]:[]);
+    document.querySelectorAll(".acc_cb").forEach(cb=>{ if(!cb.dataset.k.startsWith("br_")) cb.checked=on.has(cb.dataset.k); });
+  },
+  accGroup(a){
+    const cbs=[...a.closest(".card").querySelectorAll(".acc_cb")]; const all=cbs.every(c=>c.checked);
+    cbs.forEach(c=>c.checked=!all);
+  },
+
+  /* ---- ⇄ Stock transfer between branches ---- */
+  _tf:null,
+  transfer(){
+    if(!can("transfer")){ toast("You don't have stock transfer rights"); return; }
+    const from=App.branch, to=Object.keys(App.branches).find(k=>k!==from);
+    Forms._tf={from,to,lines:[{itemId:"",qty:1}]};
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Transfer stock between branches</h2>
+      <div class="grid3">
+        <div class="f"><label>From</label><select id="tf_from" onchange="Forms._tf.from=this.value;Forms._tf.to=Object.keys(App.branches).find(k=>k!==this.value);document.getElementById('tf_to').value=Forms._tf.to;Forms.tfRender()">
+          ${Object.entries(App.branches).map(([k,v])=>`<option value="${k}" ${k===from?'selected':''}>${v}</option>`).join("")}</select></div>
+        <div class="f"><label>To</label><select id="tf_to" disabled>
+          ${Object.entries(App.branches).map(([k,v])=>`<option value="${k}" ${k===to?'selected':''}>${v}</option>`).join("")}</select></div>
+        <div class="f"><label>Date</label><input id="tf_date" type="date" value="${today()}"></div>
+      </div>
+      <div class="f"><label>Reference / note</label><input id="tf_ref" placeholder="e.g. driver, delivery note no."></div>
+      <table class="linetbl"><thead><tr><th>Item</th><th style="width:90px">Available</th><th style="width:90px">Qty</th><th style="width:110px" class="r">Value at cost</th><th></th></tr></thead><tbody id="tfLines"></tbody></table>
+      <button class="btn sm" onclick="Forms._tf.lines.push({itemId:'',qty:1});Forms.tfRender()">+ line</button>
+      <div class="totbox"><div class="tr g"><span>Total at cost</span><span id="tf_tot">R 0.00</span></div></div>
+      <button class="btn p" style="margin-top:12px" onclick="Actions.saveTransfer()">Transfer stock</button>`,true);
+    Forms.tfRender();
+  },
+  tfRender(){
+    const t=Forms._tf, items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
+    document.getElementById("tfLines").innerHTML=t.lines.map((l,i)=>{
+      const it=l.itemId?Store.get("items",l.itemId):null;
+      return `<tr>
+        <td><select onchange="Forms._tf.lines[${i}].itemId=this.value;Forms.tfRender()"><option value="">— pick item —</option>
+          ${items.map(x=>`<option value="${x.id}" ${x.id===l.itemId?'selected':''}>${esc((x.code?x.code+" · ":"")+x.name)}</option>`).join("")}</select></td>
+        <td class="r">${it?qtyOf(it,t.from):""}</td>
+        <td><input type="number" min="1" value="${l.qty}" oninput="Forms._tf.lines[${i}].qty=+this.value||0;Forms.tfTot()"></td>
+        <td class="r" id="tfv_${i}">${it?fmt((+l.qty||0)*(+it.cost||0)):""}</td>
+        <td><span style="cursor:pointer;color:var(--bad)" onclick="Forms._tf.lines.splice(${i},1);if(!Forms._tf.lines.length)Forms._tf.lines.push({itemId:'',qty:1});Forms.tfRender()">✕</span></td></tr>`;
+    }).join("");
+    Forms.tfTot();
+  },
+  tfTot(){
+    let tot=0;
+    Forms._tf.lines.forEach((l,i)=>{ const it=l.itemId?Store.get("items",l.itemId):null; if(!it) return;
+      const v=money((+l.qty||0)*(+it.cost||0)); tot+=v; const c=document.getElementById("tfv_"+i); if(c) c.textContent=fmt(v); });
+    document.getElementById("tf_tot").textContent=fmt(tot);
+  },
+
+  /* ---- View an attached invoice ---- */
+  async viewAttachment(docId){
+    const d=Store.get("documents",docId); if(!d||!d.attachment) return;
+    const sup=Store.get("suppliers",d.supplierId);
+    const { data, error } = await Store.client().storage.from("invoices").createSignedUrl(d.attachment.path,3600);
+    if(error){ toast("Can't open the invoice — "+niceErr(error)); return; }
+    const src=data.signedUrl, isPdf=/pdf/i.test(d.attachment.type||"");
+    modal(`<span class="close" onclick="closeModal()">✕</span>
+      <h2>${esc(d.no)} · ${esc(sup?sup.name:"")}${d.ref?" · inv "+esc(d.ref):""}</h2>
+      <div class="muted" style="margin-bottom:10px">${esc(d.date)} · ${fmt(d.total)}</div>
+      ${isPdf
+        ?`<a class="btn p" href="${src}" target="_blank" rel="noopener">Open invoice PDF</a>`
+        :`<a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="Supplier invoice" style="width:100%;border-radius:8px;border:1px solid var(--line);background:#fff"></a>
+          <div class="muted" style="font-size:12px;margin-top:6px">Tap the image to open it full size.</div>`}`,true);
+  },
+
+  /* ---- Payment / receipt ---- */
+  payment(kind,presetAcc){
+    const custs=Store.all("customers").filter(x=>inBranch(x)), sups=Store.all("suppliers").filter(x=>inBranch(x));
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>${kind==='receipt'?'Receipt (money in)':'Payment (money out)'}</h2>
+      <div class="grid2">
+        <div class="f"><label>Date</label><input id="pay_date" type="date" value="${today()}"></div>
+        <div class="f"><label>Reference</label><input id="pay_ref" placeholder="e.g. EFT / cheque no."></div>
+      </div>
+      <div class="f"><label>${kind==='receipt'?'Received from':'Paid to'}</label><input id="pay_who" placeholder="Name"></div>
+      <div class="grid2">
+        <div class="f"><label>${kind==='receipt'?'Allocate to (income / debtor)':'Allocate to (expense / creditor)'}</label>
+          <select id="pay_acc">${accountOptions(presetAcc|| (kind==='receipt'?ACC.debtors:ACC.creditors))}</select></div>
+        <div class="f"><label>Via (bank / cash)</label><select id="pay_via">${accountOptions(ACC.bank,["Asset"])}</select></div>
+      </div>
+      <div class="grid2">
+        <div class="f"><label>Amount (incl VAT)</label><input id="pay_amt" type="number" step="0.01"></div>
+        <div class="f"><label>Project</label><select id="pay_project">${projectOptions()}</select></div>
+      </div>
+      <div class="f"><label><input type="checkbox" id="pay_vat" style="width:auto"> This amount includes 15% VAT (split out automatically)</label></div>
+      <button class="btn p" onclick="Actions.savePayment('${kind}')">Save ${kind}</button>`);
+  },
+
+  /* ---- Cash-up ---- */
+  _cuDenoms:[
+    {v:200,l:"R200 notes"},{v:100,l:"R100 notes"},{v:50,l:"R50 notes"},
+    {v:20,l:"R20 notes"},{v:10,l:"R10 notes"},
+    {v:5,l:"R5 coins"},{v:2,l:"R2 coins"},{v:1,l:"R1 coins"},
+    {v:0.5,l:"50c coins"},{v:0.2,l:"20c coins"},{v:0.1,l:"10c coins"}
+  ],
+  cashup(expected){
+    const rows=Forms._cuDenoms.map((d,i)=>`<tr>
+      <td>${d.l}</td>
+      <td style="width:90px"><input type="number" min="0" step="1" id="cu_${i}" value="0" style="text-align:right" oninput="Forms.cuCalc(${expected})"></td>
+      <td class="r" style="width:120px" id="cuv_${i}">R 0.00</td></tr>`).join("");
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Daily cash-up — ${App.branches[App.branch]}</h2>
+      <div class="banner">Count every SA denomination in the till for <b>${App.branches[App.branch]}</b>. Expected cash today: <b>${fmt(expected)}</b></div>
+      <table class="linetbl"><thead><tr><th>Denomination</th><th class="r">Count</th><th class="r">Value</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="totbox" style="max-width:none">
+        <div class="tr"><span>Cash counted</span><b id="cu_counted_v">R 0.00</b></div>
+        <div class="tr"><span>Expected in till</span><span>${fmt(expected)}</span></div>
+        <div class="tr g"><span>Variance (over / short)</span><b id="cu_var">${fmt(-expected)}</b></div>
+      </div>
+      <div class="f" style="margin-top:12px"><label>Note</label><input id="cu_note" placeholder="e.g. float R500 included, R20 short"></div>
+      <button class="btn p" onclick="Actions.saveCashup(${expected})">Close cash-up</button>`);
+  },
+  cuCalc(expected){
+    let total=0;
+    Forms._cuDenoms.forEach((d,i)=>{
+      const q=Math.max(0,+document.getElementById("cu_"+i).value||0);
+      const val=money(q*d.v); total+=val;
+      document.getElementById("cuv_"+i).textContent=fmt(val);
+    });
+    total=money(total);
+    document.getElementById("cu_counted_v").textContent=fmt(total);
+    const vEl=document.getElementById("cu_var"); const vr=money(total-expected);
+    vEl.textContent=fmt(vr);
+    vEl.style.color = Math.abs(vr)<0.01?"var(--good)":(vr<0?"var(--bad)":"var(--warn)");
+  },
+
+  /* ---- Bank import ---- */
+  bankImport(){
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Import bank statement</h2>
+      <div class="banner">Upload a CSV from your bank, or paste rows. Expected columns: <b>Date, Description, Amount</b> (money out negative). Most SA banks let you export this.</div>
+      <div class="f"><label>Upload CSV file</label><input type="file" id="bk_file" accept=".csv,text/csv" onchange="Forms._bankFile(event)"></div>
+      <div class="f"><label>…or paste rows here</label><textarea id="bk_text" rows="7" placeholder="2026-11-20, FNB OB PMT INHEP ELECTRONICS, -4200.00
+2026-11-20, CARD PURCHASE SASOL FUEL, -850.00
+2026-11-21, EFT RECEIVED J SMITH, 1265.00"></textarea></div>
+      <div class="f"><label>Into bank account</label><select id="bk_acc">${accountOptions(ACC.bank,["Asset"])}</select></div>
+      <button class="btn p" onclick="Actions.importBank()">Import lines</button>`);
+  },
+  _bankFile(ev){ const f=ev.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{document.getElementById("bk_text").value=r.result;}; r.readAsText(f); },
+
+  allocate(txnId){
+    const t=Store.get("banktxns",txnId); if(!t)return;
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Allocate transaction</h2>
+      <div class="banner">${esc(t.date)} · ${esc(t.desc)} · <b>${fmt(t.amount)}</b></div>
+      <div class="grid2">
+        <div class="f"><label>Account</label><select id="al_acc">${accountOptions(t.amount<0?"6900":ACC.salesPOS)}</select></div>
+        <div class="f"><label>Project</label><select id="al_project">${projectOptions()}</select></div>
+      </div>
+      <div class="f"><label>Includes 15% VAT? <input type="checkbox" id="al_vat" style="width:auto"></label></div>
+      <div class="f"><label><input type="checkbox" id="al_rule" style="width:auto"> Remember: always allocate lines containing "<b id="al_kw"></b>" to this account</label></div>
+      <button class="btn p" onclick="Actions.allocateTxn('${txnId}')">Allocate & post</button>`);
+    // keyword = first significant word
+    const kw=(t.desc||"").replace(/[0-9]/g,"").split(/\s+/).filter(w=>w.length>3)[0]||t.desc;
+    document.getElementById("al_kw").textContent=kw; Forms._alKw=kw;
+  },
+  bankRules(){
+    const rules=Store.all("bankrules").filter(r=>inBranch(r));
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Auto-allocation rules</h2>
+      ${rules.length?`<div class="tbl-wrap"><table><thead><tr><th>If description contains</th><th>Allocate to</th><th>VAT</th><th></th></tr></thead><tbody>
+      ${rules.map(r=>`<tr><td>${esc(r.kw)}</td><td>${esc(Views._accLabel(r.account))}</td><td>${r.vat?'15%':'—'}</td>
+        <td class="r"><button class="btn sm d" onclick="Actions.delRec('bankrules','${r.id}');Forms.bankRules()">✕</button></td></tr>`).join("")}
+      </tbody></table></div>`:`<div class="empty">No rules yet. Allocate a bank line and tick "remember" to create one.</div>`}`);
+  },
+
+  /* ---- Manual journal ---- */
+  journal(id){
+    Forms._jl=[{},{}];
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Manual journal</h2>
+      <div class="grid3">
+        <div class="f"><label>Date</label><input id="j_date" type="date" value="${today()}"></div>
+        <div class="f"><label>Reference</label><input id="j_ref"></div>
+        <div class="f"><label>Project</label><select id="j_project">${projectOptions()}</select></div>
+      </div>
+      <div class="f"><label>Memo</label><input id="j_memo"></div>
+      <table class="linetbl"><thead><tr><th>Account</th><th style="width:120px" class="r">Debit</th><th style="width:120px" class="r">Credit</th><th></th></tr></thead>
+      <tbody id="jLines"></tbody></table>
+      <button class="btn sm" onclick="Forms.jAddLine()">+ line</button>
+      <div class="totbox"><div class="tr"><span>Debits</span><span id="j_d">R 0.00</span></div>
+        <div class="tr"><span>Credits</span><span id="j_c">R 0.00</span></div></div>
+      <button class="btn p" style="margin-top:12px" onclick="Actions.saveJournal()">Post journal</button>`,true);
+    Forms.jRender();
+  },
+  _jl:[],
+  jRender(){ document.getElementById("jLines").innerHTML=Forms._jl.map((l,i)=>`<tr>
+    <td><select onchange="Forms._jl[${i}].account=this.value">${'<option value="">—</option>'+accountOptions(l.account)}</select></td>
+    <td><input type="number" step="0.01" class="right" value="${l.debit||''}" oninput="Forms._jl[${i}].debit=+this.value;Forms.jTot()"></td>
+    <td><input type="number" step="0.01" class="right" value="${l.credit||''}" oninput="Forms._jl[${i}].credit=+this.value;Forms.jTot()"></td>
+    <td><span style="cursor:pointer;color:var(--bad)" onclick="Forms._jl.splice(${i},1);Forms.jRender()">✕</span></td></tr>`).join("");
+    Forms.jTot(); },
+  jAddLine(){ Forms._jl.push({}); Forms.jRender(); },
+  jTot(){ const d=money(Forms._jl.reduce((s,l)=>s+(+l.debit||0),0)), c=money(Forms._jl.reduce((s,l)=>s+(+l.credit||0),0));
+    document.getElementById("j_d").textContent=fmt(d); document.getElementById("j_c").textContent=fmt(c); },
+
+  viewJournal(id){
+    const j=Store.get("journals",id); if(!j)return;
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Journal ${esc(j.ref||'')}</h2>
+      <div class="muted" style="margin-bottom:10px">${esc(j.date)} · ${esc(j.memo||'')} · ${esc(j.source||'manual')} · ${App.branches[j.branch]||''}</div>
+      <div class="muted" style="margin-bottom:10px;font-size:12px">Posted by ${Names.tag(j._createdBy||j._by)}${j._createdAt?" · "+new Date(j._createdAt).toLocaleString("en-ZA"):""}</div>
+      <table><thead><tr><th>Account</th><th class="r">Debit</th><th class="r">Credit</th></tr></thead><tbody>
+      ${(j.lines||[]).map(l=>`<tr><td>${esc(Views._accLabel(l.account))}</td><td class="r">${l.debit?fmtn(l.debit):''}</td><td class="r">${l.credit?fmtn(l.credit):''}</td></tr>`).join("")}
+      </tbody></table>
+      ${j.source&&j.source!=='manual'?'':`<button class="btn d" style="margin-top:12px" onclick="Actions.delRec('journals','${id}')">Reverse / delete</button>`}`);
+  }
+};
+
+/* ============================================================
+   ACTIONS (writes)
+   ============================================================ */
+const Actions = {
+  async initCompany(){
+    const b=App.branch;
+    for(const [code,name,type] of STD_ACCOUNTS){
+      const nm = code==="1000" ? name+" ("+App.branches[b]+")" : name;
+      await Store.put("accounts",{id:b+"_"+code,branch:b,code,name:nm,type});
+    }
+    if(!Store.get("settings","company_"+b)){
+      await Store.put("settings", b==="RB"
+        ? {id:"company_RB",branch:"RB",name:"The Security Mecca CC",reg:"2005/140640/23",vat:"4430 225 260",
+           tel:"035 789 4157",cell:"082 817 5717",markup:20,
+           addr:"Shop 1 Hotline Centre, 41 Bullion Boulevard, Richards Bay\nP.O Box 1185, Richards Bay Central, KZN 3900"}
+        : {id:"company_"+b,branch:b,name:"The Security Mecca "+App.branches[b],markup:20});
+    }
+    toast(App.branches[b]+" chart of accounts loaded"); App.render();
+  },
+  async saveAccess(uid){
+    if(!can("users")){ toast("You don't have the right to manage users"); return; }
+    const perms=Forms._accRead();
+    const { data, error } = await Store.client().from("profiles").update({perms}).eq("id",uid).select("id");
+    if(error||!data||!data.length){ toast("Not saved — "+(error?niceErr(error):"you don't have the right to do that")); return; }
+    await Store.loadProfiles(); closeModal(); toast("Access saved"); App.render();
+  },
+  async addUser(){
+    const g=x=>document.getElementById(x).value.trim();
+    const name=g("nu_name"), uname=normUser(g("nu_user")), pw=g("nu_pass");
+    if(!name||!uname){ toast("Enter a name and a username"); return; }
+    if(!/^[a-z0-9._-]{2,30}$/.test(uname)){ toast("Username: letters, numbers, dot, dash only"); return; }
+    if(pw.length<8){ toast("Starting password needs at least 8 characters"); return; }
+    if(Object.values(Store.profiles).some(p=>p.username===uname)){ toast("That username is already taken"); return; }
+    const perms=Forms._accRead(), btn=document.getElementById("nu_btn"); btn.disabled=true; btn.textContent="Creating…";
+    const sb=Store.client();
+    const inv=await sb.from("invites").upsert({username:uname,full_name:name,perms});
+    if(inv.error){ btn.disabled=false; btn.textContent="Create login"; toast("Not created — "+niceErr(inv.error)); return; }
+    // create the login with a throw-away client so the owner stays signed in
+    const tmp=window.supabase.createClient(CFG.url,CFG.anonKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:"mb-tmp-"+Date.now()}});
+    const r=await tmp.auth.signUp({email:toEmail(uname),password:pw,options:{data:{full_name:name}}});
+    try{ await tmp.auth.signOut(); }catch(e){}
+    if(r.error){ btn.disabled=false; btn.textContent="Create login"; toast("Not created — "+niceErr(r.error)); return; }
+    if(!r.data.session){ toast("Created, but Supabase is asking for email confirmation — turn off 'Confirm email' (see SETUP guide)"); }
+    await Store.loadProfiles(); App.render();
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Login created ✓</h2>
+      <p>Give these to <b>${esc(name)}</b>:</p>
+      <div class="card"><div>Web address: <b>${esc(location.origin+location.pathname)}</b></div><div>Username: <b>${esc(uname)}</b></div><div>Password: <b>${esc(pw)}</b></div></div>
+      <p class="muted" style="font-size:12px">They can change the password after signing in (button under their name in the side menu).</p>
+      <button class="btn p" onclick="closeModal()">Done</button>`);
+  },
+  async resetPw(uid){
+    const pw=document.getElementById("rp_pass").value.trim();
+    if(pw.length<8){ toast("At least 8 characters"); return; }
+    const { error } = await Store.client().rpc("reset_password",{target:uid,new_password:pw});
+    if(error){ toast("Not reset — "+niceErr(error)); return; }
+    closeModal(); toast("Password reset — new password: "+pw);
+  },
+  async toggleLogin(uid){
+    const p=Store.profiles[uid]; if(!p) return;
+    const { data, error } = await Store.client().from("profiles").update({active:!p.active}).eq("id",uid).select("id");
+    if(error||!data||!data.length){ toast("Not changed — "+(error?niceErr(error):"you don't have the right to do that")); return; }
+    await Store.loadProfiles(); toast(p.active?"Login disabled":"Login enabled"); App.render();
+  },
+  async cancelInvite(u){
+    const { error } = await Store.client().from("invites").delete().eq("username",u);
+    if(error){ toast(niceErr(error)); return; }
+    await Store.loadProfiles(); App.render();
+  },
+  async saveSecurity(){
+    const v=Math.max(0,+document.getElementById("sec_idle").value||0);
+    await Store.put("settings",{...(Store.get("settings","security")||{}),id:"security",idleMinutes:v});
+    toast(v?"Idle sign-out after "+v+" min":"Idle sign-out off");
+  },
+  async savePricing(){
+    const g=x=>document.getElementById(x).value;
+    const labels=[],pcts=[];
+    for(let l=0;l<6;l++){ labels.push(g("pp_lbl_"+l).trim()||DEF_LABELS[l]); const v=g("pp_pct_"+l); pcts.push(v!==""?+v:null); }
+    if(g("pp_basis")==="margin" && pcts.some(x=>isNum(x)&&x>=100)){ toast("A margin must be below 100%"); return; }
+    await Store.put("settings",{id:"pricing",labels,pcts,basis:g("pp_basis"),posLevel:+g("pp_pos"),custLevel:+g("pp_cust")});
+    App.posLevel=null; toast("Price levels saved");
+  },
+  repriceAsk(){
+    const n=Store.all("items").length;
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Re-price all stock?</h2>
+      <p>This sets the saved default % on <b>all ${n} items</b> and recalculates all six selling prices from each item's cost. Any % you set on individual items will be replaced. Save the price levels first if you changed them.</p>
+      <div style="display:flex;gap:8px"><button class="btn p" onclick="Actions.repriceAll()">Yes, re-price ${n} items</button><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+  },
+  async repriceAll(){
+    const P=Pricing(); let n=0;
+    for(const it of Store.all("items")){ it.pcts=P.pcts.slice(); repriceItem(it); await Store.put("items",it); n++; }
+    closeModal(); toast(n+" items re-priced");
+  },
+  async copyChart(from){
+    const to=App.branch, have=new Set(branchAccounts(to).map(a=>a.code));
+    let n=0;
+    for(const a of branchAccounts(from)){
+      if(have.has(a.code)) continue;
+      const nm = a.code==="1000" ? "Bank — Current ("+App.branches[to]+")" : a.name;
+      await Store.put("accounts",{id:to+"_"+a.code,branch:to,code:a.code,name:nm,type:a.type}); n++;
+    }
+    if(to!=="RB" && !Store.get("settings","company_"+to)) await Store.put("settings",{id:"company_"+to,branch:to,name:"The Security Mecca "+App.branches[to],markup:20});
+    toast(n+" accounts added to the "+App.branches[to]+" chart"); App.render();
+  },
+  async saveCompany(){
+    const g=id=>document.getElementById(id).value;
+    const b=App.branch;
+    await Store.put("settings",{id:"company_"+b,branch:b,name:g("s_name"),reg:g("s_reg"),vat:g("s_vat"),tel:g("s_tel"),
+      cell:g("s_cell"),email:g("s_email"),addr:g("s_addr"),bank:g("s_bank")});
+    toast(App.branches[b]+" company details saved");
+  },
+  async saveCustomer(id){
+    const g=x=>document.getElementById(x).value;
+    if(!g("c_name")){toast("Name required");return;}
+    const branch=id?recBranch(Store.get("customers",id)):App.branch;
+    await Store.put("customers",{id:id||undefined,branch,name:g("c_name"),contact:g("c_contact"),phone:g("c_phone"),
+      email:g("c_email"),vat:g("c_vat"),terms:+g("c_terms"),addr:g("c_addr"),priceLevel:+(document.getElementById("c_level")?.value||0)});
+    closeModal();toast("Customer saved");
+  },
+  async copyParty(coll,id,to){
+    const c=Store.get(coll,id); if(!c) return;
+    if(Store.all(coll).some(x=>inBranch(x,to)&&(x.name||"").toLowerCase()===(c.name||"").toLowerCase())){ toast(c.name+" already exists in "+App.branches[to]); return; }
+    const {id:_,_at,_by,...rest}=c;
+    await Store.put(coll,{...rest,branch:to});
+    closeModal(); toast(c.name+" copied to "+App.branches[to]+" (separate account, starts at R 0)");
+  },
+  async delParty(coll,id){
+    const kind=coll==="customers"?"customer":"supplier";
+    const used=Store.all("journals").some(j=>j.party&&j.party.id===id)||Store.all("documents").some(d=>d.customerId===id||d.supplierId===id);
+    if(used){ toast("Can't delete — this "+kind+" has quotes, invoices or bills"); return; }
+    await Actions.delRec(coll,id);
+  },
+  async saveSupplier(id){
+    const g=x=>document.getElementById(x).value;
+    if(!g("su_name")){toast("Name required");return;}
+    const branch=id?recBranch(Store.get("suppliers",id)):App.branch;
+    const old=id?Store.get("suppliers",id):{};
+    await Store.put("suppliers",{...old,id:id||undefined,branch,name:g("su_name"),contact:g("su_contact"),phone:g("su_phone"),acc:g("su_acc")});
+    closeModal();toast("Supplier saved");
+  },
+  async saveItem(id){
+    const g=x=>document.getElementById(x).value;
+    if(!g("i_name")){toast("Description required");return;}
+    const el=x=>document.getElementById(x);
+    const old=id?Store.get("items",id):{};
+    const stock={...stockOf(old)};
+    Object.keys(App.branches).forEach(k=>{ if(el("i_qty_"+k)) stock[k]=+el("i_qty_"+k).value||0; });
+    const cost = el("i_cost") ? +el("i_cost").value||0 : (+old.cost||0);
+    let pcts=pctsOf(old), prices=pricesOf(old);
+    if(can("editPrices")){
+      pcts=[]; prices=[];
+      for(let l=0;l<6;l++){
+        const pr=el("i_pr_"+l).value; prices.push(pr!==""?money(+pr):null);
+        if(el("i_pct_"+l)){ const pc=el("i_pct_"+l).value; pcts.push(pc!==""?+pc:null); }
+        else pcts.push(pr!==""?pctFrom(cost,+pr):null);   // no cost rights: keep % in step with the price typed
+      }
+    }
+    const rec={...old,id:id||undefined,code:g("i_code"),name:g("i_name"),cost,pcts,prices,price:prices[0],stock,bin:g("i_bin")};
+    if(!id && !can("editPrices")) repriceItem(rec);   // new item by someone who can't set prices: use default %
+    delete rec.markup; delete rec.qty;
+    await Store.put("items",rec);
+    closeModal();toast("Item saved");
+  },
+  async saveProject(id){
+    const g=x=>document.getElementById(x).value;
+    if(!g("p_name")){toast("Name required");return;}
+    await Store.put("projects",{id:id||undefined,name:g("p_name"),customer:g("p_customer"),status:g("p_status")});
+    closeModal();toast("Project saved");
+  },
+  async saveAccount(id){
+    const g=x=>document.getElementById(x).value;
+    const code=g("a_code").trim();
+    if(!code||!g("a_name")){toast("Code and name required");return;}
+    const ex=id?Store.get("accounts",id):null;
+    const b=ex?recBranch(ex):App.branch;
+    if(branchAccounts(b).some(a=>a.code===code && a.id!==id)){ toast("Code "+code+" already exists in the "+App.branches[b]+" chart"); return; }
+    await Store.put("accounts",{id:id||(b+"_"+code),branch:b,code,name:g("a_name"),type:g("a_type")});
+    closeModal();toast("Account saved to "+App.branches[b]+" chart");
+  },
+  async delAccount(id){
+    const a=Store.get("accounts",id); if(!a) return;
+    const b=recBranch(a);
+    const used=Store.all("journals").some(j=>inBranch(j,b)&&(j.lines||[]).some(l=>l.account===a.code));
+    if(used){ toast("Can't delete "+a.code+" — it has transactions in "+App.branches[b]); return; }
+    await Actions.delRec("accounts",id);
+  },
+  async delRec(coll,id){ if(await Store.del(coll,id)===false) return; closeModal(); toast("Deleted"); },
+
+  async saveDocument(id,convert){
+    const g=x=>document.getElementById(x).value;
+    const d=Forms._doc;
+    d.customerId=g("d_cust"); d.projectId=g("d_project"); d.date=g("d_date"); d.branch=g("d_branch");
+    d.type=convert?"invoice":g("d_type");
+    d.lines=d.lines.filter(l=>l.desc&&(l.qty||l.price));
+    if(!d.customerId){toast("Select a customer");return;}
+    if(!inBranch(Store.get("customers",d.customerId)||{},d.branch)){toast("That customer belongs to the other branch");return;}
+    if(!d.lines.length){toast("Add at least one line");return;}
+    if(d.type==="invoice" && !Post.ensure(d.branch,[ACC.debtors,ACC.salesInv,ACC.vatOut,ACC.cos,ACC.stock])) return;
+    d.sub=money(d.lines.reduce((s,l)=>s+(l.qty||0)*(l.price||0),0));
+    d.vat=money(d.sub*VAT_RATE); d.total=money(d.sub+d.vat);
+    const wasQuote = id?((Store.get("documents",id)||{}).type==="quote"):true;
+    if(!d.no){ d.no = d.type==="invoice"?await nextNo("invoice","INV",6,d.branch):await nextNo("quote","QU",6,d.branch); }
+    if(convert && wasQuote){ d.quoteNo=d.no; d.no=await nextNo("invoice","INV",6,d.branch); }
+    d.id=id||d.id;
+    const saved=await Store.put("documents",d);
+    // post to GL only for invoices (and only once)
+    if(d.type==="invoice" && !saved.posted){
+      await Actions._postInvoice(saved);
+      saved.posted=true; await Store.put("documents",saved);
+    }
+    closeModal(); toast(d.type==="invoice"?"Invoice saved & posted":"Quote saved"); App.go("documents");
+  },
+  async convertToInvoice(id){ await Actions.saveDocument(id,true); },
+  async _postInvoice(d){
+    const cust=Store.get("customers",d.customerId);
+    const lines=[
+      {account:ACC.debtors,debit:d.total,credit:0},
+      {account:ACC.salesInv,debit:0,credit:d.sub},
+      {account:ACC.vatOut,debit:0,credit:d.vat}
+    ];
+    // cost of sales + stock reduction
+    let cos=0;
+    d.lines.forEach(l=>{ if(l.itemId){ const it=Store.get("items",l.itemId); if(it){ cos+=money((it.cost||0)*(l.qty||0));
+      addQty(it,d.branch||App.branch,-(l.qty||0)); Store.put("items",it); } }});
+    if(cos>0){ lines.push({account:ACC.cos,debit:cos,credit:0}); lines.push({account:ACC.stock,debit:0,credit:cos}); }
+    await Post.journal({source:"invoice",ref:d.no,memo:"Invoice "+(cust?cust.name:""),date:d.date,branch:d.branch,
+      projectId:d.projectId, party:{kind:"customer",id:d.customerId}, lines});
+  },
+
+  async saveBill(){
+    const g=x=>document.getElementById(x).value;
+    const sup=g("b_sup"); if(!sup){toast("Select supplier");return;}
+    if(!Post.ensure(App.branch,[g("b_acc"),ACC.vatIn,ACC.creditors])) return;
+    const sub=money(+g("b_amt")); if(!sub){toast("Enter amount");return;}
+    const addVat=g("b_vat")==="1"; const vat=addVat?money(sub*VAT_RATE):0; const total=money(sub+vat);
+    const no=await nextNo("bill","BILL",6,App.branch);
+    const f=document.getElementById("b_cam").files[0]||document.getElementById("b_file").files[0];
+    const attachment = f ? await Actions._uploadAttachment(f,App.branch) : null;
+    const d={id:undefined,type:"bill",no,ref:g("b_ref"),date:g("b_date"),supplierId:sup,sub,vat,total,paid:0,acc:g("b_acc"),projectId:g("b_project"),attachment,branch:App.branch};
+    const saved=await Store.put("documents",d);
+    const lines=[{account:g("b_acc"),debit:sub,credit:0}];
+    if(vat) lines.push({account:ACC.vatIn,debit:vat,credit:0});
+    lines.push({account:ACC.creditors,debit:0,credit:total});
+    await Post.journal({source:"bill",ref:no,memo:"Bill "+(Store.get("suppliers",sup)||{}).name,date:g("b_date"),
+      projectId:g("b_project"), party:{kind:"supplier",id:sup}, lines});
+    closeModal();toast("Bill recorded & posted");
+  },
+
+  /* ---- 📎 Invoice attachments (stored in the app's file storage) ---- */
+  async _uploadAttachment(file,branch){
+    try{
+      let blob=file;
+      if(file.type && file.type.startsWith("image/") && file.size>600000) blob=await Actions._shrinkImage(file,2000);
+      const type=blob.type||file.type||"application/octet-stream";
+      const ext=/pdf/.test(type)?"pdf":/png/.test(type)?"png":"jpg";
+      const path=(branch||App.branch)+"/"+new Date().toISOString().slice(0,7)+"-"+uid()+"."+ext;
+      const { error } = await Store.client().storage.from("invoices").upload(path,blob,{contentType:type});
+      if(error) throw error;
+      return {path,type,size:blob.size||0};
+    }catch(e){
+      toast("Bill saved — invoice image could not be stored ("+niceErr(e)+")");
+      return null;
+    }
+  },
+  async attachToBill(docId,file){
+    if(!file) return;
+    const d=Store.get("documents",docId); if(!d) return;
+    toast("Uploading invoice…");
+    const att=await Actions._uploadAttachment(file,recBranch(d));
+    if(!att) return;
+    d.attachment=att; await Store.put("documents",d);
+    toast("Invoice attached to "+d.no);
+  },
+
+  _shrinkImage(file,max){
+    return new Promise(res=>{
+      const img=new Image(), u=URL.createObjectURL(file);
+      img.onload=()=>{
+        const s=Math.min(1,max/Math.max(img.width,img.height));
+        const c=document.createElement("canvas");
+        c.width=Math.round(img.width*s); c.height=Math.round(img.height*s);
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+        URL.revokeObjectURL(u);
+        c.toBlob(b=>res(b||file),"image/jpeg",0.85);
+      };
+      img.onerror=()=>{ URL.revokeObjectURL(u); res(file); };
+      img.src=u;
+    });
+  },
+  async savePayment(kind){
+    const g=x=>document.getElementById(x).value;
+    const amt=money(+g("pay_amt")); if(!amt){toast("Enter amount");return;}
+    const acc=g("pay_acc"), via=g("pay_via"), proj=g("pay_project");
+    const inclVat=document.getElementById("pay_vat").checked;
+    const vat=inclVat?money(amt-amt/(1+VAT_RATE)):0, net=money(amt-vat);
+    if(!Post.ensure(App.branch,[acc,via,vat?(kind==="receipt"?ACC.vatOut:ACC.vatIn):null])) return;
+    const p={id:undefined,kind,date:g("pay_date"),ref:g("pay_ref"),who:g("pay_who"),account:acc,via,amount:amt,projectId:proj,branch:App.branch};
+    await Store.put("payments",p);
+    let lines;
+    if(kind==="receipt"){
+      lines=[{account:via,debit:amt,credit:0}];
+      if(vat){ lines.push({account:acc,debit:0,credit:net}); lines.push({account:ACC.vatOut,debit:0,credit:vat}); }
+      else lines.push({account:acc,debit:0,credit:amt});
+    }else{
+      lines=[{account:via,debit:0,credit:amt}];
+      if(vat){ lines.push({account:acc,debit:net,credit:0}); lines.push({account:ACC.vatIn,debit:vat,credit:0}); }
+      else lines.push({account:acc,debit:amt,credit:0});
+    }
+    await Post.journal({source:kind,ref:g("pay_ref"),memo:(kind==="receipt"?"Receipt ":"Payment ")+g("pay_who"),
+      date:g("pay_date"),projectId:proj,lines});
+    closeModal();toast(kind==="receipt"?"Receipt saved":"Payment saved");
+  },
+
+  async posPay(method){
+    if(!App.cart.length)return;
+    if(!Post.ensure(App.branch,[ACC.bank,ACC.till,ACC.salesPOS,ACC.vatOut,ACC.cos,ACC.stock])) return;
+    const sub=money(App.cart.reduce((s,l)=>s+l.qty*l.price,0)), vat=money(sub*VAT_RATE), tot=money(sub+vat);
+    const no=await nextNo("pos","POS",6,App.branch);
+    const bankAcc = ACC.bank;
+    const debitAcc = method==="cash"?ACC.till:bankAcc;
+    const lines=[{account:debitAcc,debit:tot,credit:0},{account:ACC.salesPOS,debit:0,credit:sub},{account:ACC.vatOut,debit:0,credit:vat}];
+    let cos=0;
+    App.cart.forEach(l=>{ if(l.itemId){ const it=Store.get("items",l.itemId); if(it){ cos+=money((it.cost||0)*l.qty); addQty(it,App.branch,-l.qty); Store.put("items",it);}}});
+    if(cos>0){ lines.push({account:ACC.cos,debit:cos,credit:0}); lines.push({account:ACC.stock,debit:0,credit:cos}); }
+    await Post.journal({source:"pos",ref:no,memo:"POS sale ("+method+")",date:today(),branch:App.branch,lines});
+    App.cart=[]; toast("Sale "+no+" — "+fmt(tot)+" ("+method+")"); App.render();
+  },
+
+  async saveCashup(expected){
+    let counted=0; const breakdown={};
+    Forms._cuDenoms.forEach((d,i)=>{ const q=Math.max(0,+document.getElementById("cu_"+i).value||0);
+      if(q){ breakdown[d.v]=q; counted+=q*d.v; } });
+    counted=money(counted);
+    await Store.put("cashups",{id:undefined,date:today(),branch:App.branch,expected,counted,
+      variance:money(counted-expected),breakdown,note:document.getElementById("cu_note").value});
+    closeModal();toast("Cash-up closed"); App.render();
+  },
+
+  async importBank(){
+    const txt=document.getElementById("bk_text").value.trim();
+    const acc=document.getElementById("bk_acc").value;
+    if(!txt){toast("Nothing to import");return;}
+    const rows=txt.split(/\r?\n/).filter(r=>r.trim());
+    let n=0, start=0;
+    if(/date/i.test(rows[0])&&/amount|desc/i.test(rows[0])) start=1;
+    for(let i=start;i<rows.length;i++){
+      const parts=Actions._csvSplit(rows[i]); if(parts.length<3)continue;
+      const date=parts[0].trim(), desc=parts.slice(1,-1).join(" ").trim(), amount=money(parseFloat(parts[parts.length-1].replace(/[^0-9.\-]/g,"")));
+      if(isNaN(amount))continue;
+      await Store.put("banktxns",{id:undefined,date,desc,amount,bankAccount:acc,allocated:false,branch:App.branch});
+      n++;
+    }
+    closeModal(); toast(n+" lines imported"); App.go("bank"); Actions.autoAllocate(true);
+  },
+  _csvSplit(line){ // handle quoted commas
+    const out=[];let cur="",q=false;
+    for(const ch of line){ if(ch==='"'){q=!q;} else if(ch===","&&!q){out.push(cur);cur="";} else cur+=ch; }
+    out.push(cur); return out;
+  },
+  async autoAllocate(silent){
+    const rules=Store.all("bankrules").filter(r=>inBranch(r)); let n=0;
+    for(const t of Store.all("banktxns").filter(t=>inBranch(t))){
+      if(t.allocated)continue;
+      const r=rules.find(r=>t.desc.toLowerCase().includes(r.kw.toLowerCase()));
+      if(r){ await Actions._postBankTxn(t,r.account,r.vat,r.projectId); n++; }
+    }
+    if(!silent) toast(n?(n+" lines auto-allocated"):"No matching rules — allocate manually once to teach it");
+    App.render();
+  },
+  async allocateTxn(txnId){
+    const t=Store.get("banktxns",txnId); if(!t)return;
+    const acc=document.getElementById("al_acc").value;
+    const vat=document.getElementById("al_vat").checked;
+    const proj=document.getElementById("al_project").value;
+    if(document.getElementById("al_rule").checked){
+      await Store.put("bankrules",{id:undefined,branch:recBranch(t),kw:Forms._alKw,account:acc,vat,projectId:proj});
+    }
+    await Actions._postBankTxn(t,acc,vat,proj);
+    closeModal();toast("Allocated & posted");
+  },
+  async _postBankTxn(t,acc,inclVat,proj){
+    const bank=t.bankAccount;
+    if(!Post.ensure(recBranch(t),[bank,acc,inclVat?(t.amount<0?ACC.vatIn:ACC.vatOut):null])) return false;
+    const amt=Math.abs(t.amount);
+    const vat=inclVat?money(amt-amt/(1+VAT_RATE)):0, net=money(amt-vat);
+    let lines;
+    if(t.amount<0){ // money out
+      lines=[{account:bank,debit:0,credit:amt}];
+      if(vat){ lines.push({account:acc,debit:net,credit:0}); lines.push({account:ACC.vatIn,debit:vat,credit:0}); }
+      else lines.push({account:acc,debit:amt,credit:0});
+    }else{ // money in
+      lines=[{account:bank,debit:amt,credit:0}];
+      if(vat){ lines.push({account:acc,debit:0,credit:net}); lines.push({account:ACC.vatOut,debit:0,credit:vat}); }
+      else lines.push({account:acc,debit:0,credit:amt});
+    }
+    await Post.journal({source:"bank",ref:"BANK",memo:t.desc,date:t.date,branch:t.branch,projectId:proj,lines});
+    t.allocated=true; t.account=acc; await Store.put("banktxns",t);
+  },
+
+  async saveTransfer(){
+    const t=Forms._tf; if(!t) return;
+    if(!can("transfer")||!can("br_"+t.from)||!can("br_"+t.to)){ toast("You need transfer rights and access to both branches"); return; }
+    const lines=t.lines.filter(l=>l.itemId&&(+l.qty)>0);
+    if(!lines.length){ toast("Pick at least one item and quantity"); return; }
+    for(const l of lines){ const it=Store.get("items",l.itemId);
+      if(qtyOf(it,t.from) < +l.qty){ toast("Only "+qtyOf(it,t.from)+" × "+it.name+" in "+App.branches[t.from]); return; } }
+    if(!Post.ensure(t.from,[ACC.stock,ACC.interBranch]) || !Post.ensure(t.to,[ACC.stock,ACC.interBranch])) return;
+    const date=document.getElementById("tf_date").value||today(), note=document.getElementById("tf_ref").value;
+    let value=0;
+    for(const l of lines){ const it=Store.get("items",l.itemId);
+      value+=money((+l.qty)*(+it.cost||0)); addQty(it,t.from,-(+l.qty)); addQty(it,t.to,+l.qty); await Store.put("items",it); }
+    value=money(value);
+    const no=await nextNo("transfer","TRF",6,t.from);
+    const memo="Stock transfer "+App.branches[t.from]+" → "+App.branches[t.to]+(note?" · "+note:"");
+    if(value>0){
+      await Post.journal({source:"transfer",ref:no,memo,date,branch:t.from,
+        lines:[{account:ACC.interBranch,debit:value,credit:0},{account:ACC.stock,debit:0,credit:value}]});
+      await Post.journal({source:"transfer",ref:no,memo,date,branch:t.to,
+        lines:[{account:ACC.stock,debit:value,credit:0},{account:ACC.interBranch,debit:0,credit:value}]});
+    }
+    await Store.put("transfers",{no,date,from:t.from,to:t.to,note,value,branch:t.from,
+      lines:lines.map(l=>{const it=Store.get("items",l.itemId);return {itemId:l.itemId,code:it.code||"",name:it.name,qty:+l.qty,cost:+it.cost||0};})});
+    closeModal(); toast(no+": "+lines.length+" item(s) moved to "+App.branches[t.to]+" — "+fmt(value)); App.render();
+  },
+
+  async saveJournal(){
+    const g=x=>document.getElementById(x).value;
+    const lines=Forms._jl.filter(l=>l.account&&((+l.debit)||(+l.credit)));
+    if(lines.length<2){toast("Need at least two lines");return;}
+    try{
+      await Post.journal({source:"manual",ref:g("j_ref"),memo:g("j_memo"),date:g("j_date"),
+        projectId:g("j_project"),lines:lines.map(l=>({account:l.account,debit:+l.debit||0,credit:+l.credit||0}))});
+      closeModal();toast("Journal posted");
+    }catch(e){/* toast already shown */}
+  },
+
+  /* ---- print invoice/quote ---- */
+  printDoc(id){
+    const d=Store.get("documents",id); const c=Company(recBranch(d)); const cust=Store.get("customers",d.customerId)||{};
+    const w=window.open("","_blank");
+    const rows=(d.lines||[]).map(l=>`<tr><td>${esc(l.desc||"")}</td><td style="text-align:center">${l.qty||0}</td><td style="text-align:right">R ${fmtn(l.price||0)}</td><td style="text-align:right">R ${fmtn((l.qty||0)*(l.price||0))}</td></tr>`).join("");
+    const html=`<html><head><title>${esc(d.no)}</title><style>
+      body{font-family:Arial;color:#222;padding:30px;font-size:13px}
+      .hd{display:flex;justify-content:space-between;border-bottom:3px solid #f5a623;padding-bottom:12px}
+      .hd b{font-size:22px;color:#c8860a}
+      h1{font-size:20px;text-transform:uppercase;margin:16px 0}
+      table{width:100%;border-collapse:collapse;margin-top:14px}
+      th,td{border:1px solid #ccc;padding:7px}th{background:#f5f5f5;text-align:left}
+      .tot{margin-left:auto;width:260px;margin-top:12px}
+      .tot td{border:none;padding:3px 7px}
+      .box{border:1px solid #ccc;padding:10px;margin-top:10px}
+    </style></head><body>
+    <div class="hd"><div><b>${esc(c.name||'The Security Mecca')}</b><br>${esc((c.addr||'').replace(/\n/g,'<br>'))}<br>Tel ${esc(c.tel||'')} · Cell ${esc(c.cell||'')}<br>VAT ${esc(c.vat||'')} · Reg ${esc(c.reg||'')}</div>
+    <div style="text-align:right"><h1>${d.type==='invoice'?'Tax Invoice':'Quotation'}</h1>No: <b>${esc(d.no)}</b><br>Date: ${esc(d.date)}</div></div>
+    <div class="box"><b>To:</b> ${esc(cust.name||'')}<br>${esc(cust.addr||'')}<br>${esc(cust.phone||'')} ${cust.vat?' · VAT '+esc(cust.vat):''}</div>
+    <table><thead><tr><th>Description</th><th style="width:60px;text-align:center">Qty</th><th style="width:100px;text-align:right">Unit Price</th><th style="width:110px;text-align:right">Nett Price</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="tot"><tr><td>Subtotal</td><td style="text-align:right">R ${fmtn(d.sub)}</td></tr>
+      <tr><td>VAT 15%</td><td style="text-align:right">R ${fmtn(d.vat)}</td></tr>
+      <tr><td><b>TOTAL</b></td><td style="text-align:right"><b>R ${fmtn(d.total)}</b></td></tr></table>
+    <div class="box" style="margin-top:20px">${esc(c.bank||'Banking details on request.')}<br><br>
+    Goods remain property of ${esc(c.name||'the company')} until paid in full. Returns accepted within 7 days. E&OE.</div>
+    <script>window.print()<\/script></body></html>`;
+    w.document.write(html); w.document.close();
+  },
+
+  async exportJSON(){
+    const blob=JSON.stringify(Store.data,null,2);
+    Actions._download("meccabooks-backup-"+today()+".json",blob);
+  },
+  async exportCSV(coll){
+    const rows=Store.all(coll);
+    if(coll==="journals"){
+      let csv="Date,Ref,Memo,Account,Debit,Credit,Branch,Source\n";
+      rows.forEach(j=>(j.lines||[]).forEach(l=>{csv+=`${j.date},${j.ref||''},"${(j.memo||'').replace(/"/g,'')}",${l.account},${l.debit||0},${l.credit||0},${j.branch||''},${j.source||''}\n`;}));
+      Actions._download("journals-"+today()+".csv",csv);
+    }
+  },
+  _download(name,content){
+    // sandbox blocks <a download>; offer copy fallback
+    try{ const b=new Blob([content],{type:"text/plain"}); const u=URL.createObjectURL(b);
+      const a=document.createElement("a"); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(u),2000);
+    }catch(e){}
+    navigator.clipboard?.writeText(content).then(()=>toast("Copied to clipboard (download may be blocked in-frame)")).catch(()=>toast("Export ready"));
+  }
+};
+
+/* ---- cart helpers ---- */
+App.getPosLevel=function(){ return (App.posLevel!=null && can("editPrices")) ? App.posLevel : Pricing().posLevel; };
+App.cartAdd=function(itemId,level){ const it=Store.get("items",itemId); if(!it)return;
+  const lv=(level!=null&&can("editPrices")?level:App.getPosLevel()), pr=priceOf(it,lv);
+  if(pr==null){ toast("No "+Pricing().labels[lv]+" price set for "+it.name); return; }
+  const ex=App.cart.find(l=>l.itemId===itemId&&(l.level||0)===lv);
+  if(ex)ex.qty++; else App.cart.push({itemId,name:it.name,price:pr,level:lv,qty:1}); App.render(); };
+App.cartQty=function(i,v){ App.cart[i].qty=Math.max(1,+v||1); App.render(); };
+App.cartDel=function(i){ App.cart.splice(i,1); App.render(); };
+
+/* ---- boot ---- */
+/* ============================================================
+   AUTH — own Mecca Books usernames & passwords (no claude.ai needed)
+   ============================================================ */
+const Auth = {
+  _screen(html){
+    let el=document.getElementById("authScreen");
+    if(!el){ el=document.createElement("div"); el.id="authScreen"; document.body.appendChild(el); }
+    el.innerHTML=`<div class="authbox"><div class="brand" style="border:0;padding:0 0 14px"><b>Mecca Books</b><small>The Security Mecca · Accounting</small></div>${html}</div>`;
+    el.style.display="flex";
+  },
+  hide(){ const el=document.getElementById("authScreen"); if(el) el.style.display="none"; },
+  show(msg){
+    this._screen(`<h2 style="margin:0 0 14px;font-size:18px">Sign in</h2>
+      ${msg?`<div class="banner">${esc(msg)}</div>`:""}
+      <form onsubmit="event.preventDefault();Auth.signIn()">
+        <div class="f"><label>Username</label><input id="au_user" autocomplete="username" autocapitalize="none" autofocus></div>
+        <div class="f"><label>Password</label><input id="au_pass" type="password" autocomplete="current-password"></div>
+        <button class="btn p" style="width:100%;padding:11px" id="au_btn">Sign in</button>
+      </form>
+      <div id="au_err" style="color:var(--bad);margin-top:10px;min-height:18px"></div>
+      <p class="muted" style="font-size:12px;margin-top:14px">Forgot your password? Ask the owner to reset it under Users &amp; Access.<br>
+      Setting up for the first time? <a onclick="Auth.ownerSetup()" style="cursor:pointer">Create the owner login</a></p>`);
+  },
+  async signIn(){
+    const u=document.getElementById("au_user").value, pw=document.getElementById("au_pass").value;
+    const btn=document.getElementById("au_btn"), err=document.getElementById("au_err");
+    if(!u||!pw){ err.textContent="Enter your username and password"; return; }
+    btn.disabled=true; btn.textContent="Signing in…"; err.textContent="";
+    const { error } = await Store.client().auth.signInWithPassword({email:toEmail(u), password:pw});
+    if(error){ btn.disabled=false; btn.textContent="Sign in"; err.textContent="Can't sign in: "+niceErr(error); return; }
+    reloadApp();
+  },
+  ownerSetup(){
+    this._screen(`<h2 style="margin:0 0 8px;font-size:18px">Create the owner login</h2>
+      <p class="muted" style="font-size:13px">Only works once, for the owner username set in the database setup (normally <b>vivian</b>).</p>
+      <form onsubmit="event.preventDefault();Auth.createOwner()">
+        <div class="f"><label>Owner username</label><input id="ow_user" value="vivian" autocapitalize="none"></div>
+        <div class="f"><label>Your name</label><input id="ow_name" value="Vivian Lohrmann"></div>
+        <div class="f"><label>Choose a password (at least 8 characters)</label><input id="ow_pass" type="password" autocomplete="new-password"></div>
+        <div class="f"><label>Repeat password</label><input id="ow_pass2" type="password" autocomplete="new-password"></div>
+        <button class="btn p" style="width:100%;padding:11px">Create owner login</button>
+      </form>
+      <div id="au_err" style="color:var(--bad);margin-top:10px;min-height:18px"></div>
+      <p style="font-size:12px"><a onclick="Auth.show()" style="cursor:pointer">← Back to sign in</a></p>`);
+  },
+  async createOwner(){
+    const g=x=>document.getElementById(x).value, err=document.getElementById("au_err");
+    const u=normUser(g("ow_user")), pw=g("ow_pass");
+    if(pw.length<8){ err.textContent="Use at least 8 characters"; return; }
+    if(pw!==g("ow_pass2")){ err.textContent="The passwords don't match"; return; }
+    const r=await Store.client().auth.signUp({email:toEmail(u), password:pw, options:{data:{full_name:g("ow_name")}}});
+    if(r.error){ err.textContent="Not created: "+niceErr(r.error); return; }
+    if(!r.data.session){
+      err.textContent="Login created, but Supabase wants an email confirmation. In Supabase: Authentication → Sign In / Providers → Email → turn OFF 'Confirm email', then sign in.";
+      return;
+    }
+    reloadApp();
+  },
+  blocked(){
+    this._screen(`<h2 style="margin:0 0 10px;font-size:18px">Login not active</h2>
+      <p>This login has been disabled or isn't set up yet. Ask the owner to check it under Users &amp; Access.</p>
+      <button class="btn" onclick="Auth.signOut()">Sign out</button>`);
+  },
+  async signOut(){ try{ await Store.client().auth.signOut(); }catch(e){} reloadApp(); },
+  changePassword(){
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Change your password</h2>
+      <div class="f"><label>New password (at least 8 characters)</label><input id="cp_1" type="password" autocomplete="new-password"></div>
+      <div class="f"><label>Repeat new password</label><input id="cp_2" type="password" autocomplete="new-password"></div>
+      <button class="btn p" onclick="Auth.savePassword()">Save password</button>`);
+  },
+  async savePassword(){
+    const a=document.getElementById("cp_1").value, b=document.getElementById("cp_2").value;
+    if(a.length<8){ toast("Use at least 8 characters"); return; }
+    if(a!==b){ toast("The passwords don't match"); return; }
+    const { error } = await Store.client().auth.updateUser({password:a});
+    if(error){ toast("Not changed — "+niceErr(error)); return; }
+    closeModal(); toast("Password changed");
+  },
+  // sign out automatically after a spell of no activity (shared till PCs)
+  watchIdle(){
+    let last=Date.now();
+    ["click","keydown","touchstart","mousemove"].forEach(ev=>document.addEventListener(ev,()=>{ last=Date.now(); },{passive:true}));
+    setInterval(()=>{
+      const mins=+((Store.get("settings","security")||{}).idleMinutes ?? 30);
+      if(mins>0 && Date.now()-last > mins*60000) Auth.signOut();
+    }, 30000);
+  }
+};
+
+function reloadApp(){ location.reload(); }
+async function boot(){
+  if(!CFG.url || !CFG.anonKey || /YOUR-/.test(CFG.url+CFG.anonKey)){
+    Auth._screen(`<h2 style="font-size:18px">Not connected yet</h2><p>Fill in your Supabase details in <b>config.js</b> (see SETUP guide, step 3).</p>`); return;
+  }
+  if(!window.supabase){ Auth._screen(`<p>Couldn't load the app files. Check your internet connection and reload.</p>`); return; }
+  const { data:{ session } } = await Store.client().auth.getSession();
+  if(!session){ Auth.show(); return; }
+  try{ if(await App.start()!==false) Auth.hide(); }
+  catch(e){ console.error(e); Auth.show("Please sign in again."); }
+  Store.client().auth.onAuthStateChange(ev=>{ if(ev==="SIGNED_OUT") reloadApp(); });
+}
+window.addEventListener("DOMContentLoaded",boot);
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>

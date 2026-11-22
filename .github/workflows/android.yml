@@ -1,0 +1,56 @@
+# Builds the Mecca Books Android app (APK) online.
+# Run it from the repo: Actions → "Build Android APK" → Run workflow.
+# When it finishes, download "MeccaBooks-APK" from the bottom of the run page.
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["index.html", "config.js", "capacitor.config.json", "icons/**", ".github/workflows/android.yml"]
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+
+      - name: Prepare app files
+        run: |
+          npm install
+          npm run www
+          npx cap add android
+          npx cap sync android
+
+      - name: Use the Mecca Books icon
+        run: |
+          res=android/app/src/main/res
+          rm -rf $res/mipmap-anydpi-v26
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p $res/mipmap-$d
+            cp icons/android/mipmap-$d/ic_launcher.png $res/mipmap-$d/ic_launcher.png
+            cp icons/android/mipmap-$d/ic_launcher.png $res/mipmap-$d/ic_launcher_round.png
+            rm -f $res/mipmap-$d/ic_launcher_foreground.png
+          done
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk MeccaBooks.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MeccaBooks-APK
+          path: MeccaBooks.apk
