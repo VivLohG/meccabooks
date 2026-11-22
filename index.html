@@ -62,6 +62,7 @@
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
   th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0}
+  .tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--brand);color:#fff;vertical-align:middle}
   td.r,th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   tr:hover td{background:var(--panel2)}
   .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
@@ -475,8 +476,22 @@ async function nextNo(key,prefix,pad,branch){
 
 /* ---- stock per branch: item.stock = {RB:n, VV:n} (legacy item.qty = Richards Bay) ---- */
 function stockOf(it){ return it.stock ? it.stock : {RB:+it.qty||0}; }
-function qtyOf(it,b){ b=b||App.branch; const s=stockOf(it);
+function qtyOf(it,b){ b=b||App.branch;
+  if(isKit(it)){   // a kit has no stock of its own: how many can be made from the parts on hand
+    if(b==="ALL") return Object.keys(App.branches).reduce((x,k)=>x+qtyOf(it,k),0);
+    const ps=kitParts(it); if(!ps.length) return 0;
+    return Math.max(0,Math.min(...ps.map(p=>Math.floor(qtyOf(p.item,b)/(+p.qty||1))))); }
+  const s=stockOf(it);
   return b==="ALL" ? Object.keys(App.branches).reduce((x,k)=>x+(+s[k]||0),0) : (+s[b]||0); }
+/* ---- KITS: a product made up of other products (item.kit = [{id, qty}]) ---- */
+const isKit = it => !!(it && Array.isArray(it.kit) && it.kit.length);
+function kitParts(it){ return (it.kit||[]).map(p=>({...p,item:Store.get("items",p.id)})).filter(p=>p.item && !isKit(p.item)); }
+function costOf(it){ if(!it) return 0; if(!isKit(it)) return +it.cost||0;
+  return Math.round(kitParts(it).reduce((x,p)=>x+(+p.item.cost||0)*(+p.qty||0),0)*10000)/10000; }
+// move stock (d<0 = out) — a kit moves its parts; returns the value at cost; touched collects items to save once
+function moveStock(it,b,d,touched){
+  if(isKit(it)){ let c=0; kitParts(it).forEach(p=>{ c+=moveStock(p.item,b,d*(+p.qty||0),touched); }); return money(c); }
+  addQty(it,b,d); touched.set(it.id,it); return money((+it.cost||0)*Math.abs(d)); }
 function addQty(it,b,d){ const s={...stockOf(it)}; s[b]=Math.round(((+s[b]||0)+d)*1000)/1000; it.stock=s; delete it.qty; }
 
 /* ---- 6 PRICE LEVELS: Trade, Special, Retail + 3 own labels ----
@@ -504,7 +519,16 @@ function pctFrom(cost,price,basis){
   cost=+cost||0; price=+price||0; if(!cost||!price) return null;
   return (basis||Pricing().basis)==="margin" ? Math.round((1-cost/price)*10000)/100 : Math.round((price/cost-1)*10000)/100;
 }
-function pricesOf(it){ if(Array.isArray(it.prices)) return it.prices.slice(0,6).concat(Array(6).fill(null)).slice(0,6);
+function kitPrices(it){
+  const P=Pricing(), parts=kitParts(it), disc=+it.kitDisc||0;
+  return P.labels.map((_,l)=>{
+    if(it.kitPrice==="cost") return priceFrom(costOf(it),P.pcts[l]);
+    if(!parts.length || parts.some(p=>priceOf(p.item,l)==null)) return null;
+    const sum=parts.reduce((x,p)=>x+priceOf(p.item,l)*(+p.qty||0),0);
+    return disc ? priceFrom(sum*(1-disc/100),0,"markup") : Math.round(sum*10000)/10000; });
+}
+function pricesOf(it){ if(isKit(it) && it.kitPrice!=="own") return kitPrices(it);
+  if(Array.isArray(it.prices)) return it.prices.slice(0,6).concat(Array(6).fill(null)).slice(0,6);
   const a=Array(6).fill(null); if(isNum(it.price)) a[0]=+it.price; return a; }
 function priceOf(it,l){ const v=pricesOf(it)[l||0]; return isNum(v)?+v:null; }
 function pctsOf(it){ return Array.isArray(it.pcts) ? it.pcts.slice(0,6).concat(Array(6).fill(null)).slice(0,6) : Pricing().pcts.slice(); }
@@ -670,7 +694,7 @@ const PERM_GROUPS=[
   {g:"Sales", items:[["pos","Point of Sale"],["cashup","Daily Cash-up"],["documents","Quotes & Invoices"],["customers","Customers"],["receipts","Receipts"]]},
   {g:"Purchases", items:[["suppliers","Suppliers"],["bills","Supplier Bills"],["payments","Payments"]]},
   {g:"Banking & accounting", items:[["bank","Bank & Auto-allocate"],["accounts","Chart of Accounts"],["journals","Journals"],["projects","Projects"]]},
-  {g:"Stock", items:[["inventory","Stock / Inventory"],["transfer","Transfer stock between branches"]]},
+  {g:"Stock", items:[["inventory","Stock / Inventory"],["kits","Kits (build & change kits)"],["transfer","Transfer stock between branches"]]},
   {g:"Reports", items:[["dash","Dashboard"],["vat","VAT Report"],["reports","Financial Reports"],["audit","Audit Trail"]]},
   {g:"Special rights", items:[["seeCost","See cost prices, margins & profit"],["editPrices","Change selling prices / sell at any price level"],["delete","Delete records"],["setup","Setup (company details & price levels)"],["users","Manage users & access"]]}
 ];
@@ -706,6 +730,7 @@ const NAV = [
   {id:"journals",ic:"✎",t:"Journals"},
   {id:"projects",ic:"📂",t:"Projects"},
   {id:"inventory",ic:"📦",t:"Stock / Inventory"},
+  {id:"kits",ic:"🧰",t:"Kits"},
   {grp:"Reports"},
   {id:"vat",ic:"％",t:"VAT Report"},
   {id:"reports",ic:"📈",t:"Financial Reports"},
@@ -793,7 +818,7 @@ const App = {
       return;
     }
     const fn = Views[this.route]||Views.dash;
-    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); if(this.route==="pos") Views._posFill(); if(this.route==="inventory") Views._invFill(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
+    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); if(this.route==="pos") Views._posFill(); if(this.route==="inventory") Views._invFill(); if(this.route==="kits") Views._kitFill(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
   },
   quickAdd(){
     const map={documents:()=>Forms.document(),customers:()=>Forms.customer(),suppliers:()=>Forms.supplier(),
@@ -1147,7 +1172,7 @@ const Views = {
     const br=Object.entries(App.branches).filter(([k])=>can("br_"+k));
     const sc=scope();
     const P=Pricing();
-    const totVal=k=>money(items.reduce((x,i)=>x+qtyOf(i,k)*(+i.cost||0),0));
+    const totVal=k=>money(items.reduce((x,i)=>x+(isKit(i)?0:qtyOf(i,k)*(+i.cost||0)),0));
     return Views._scopeSel()+`<div class="banner">${items.length} products. Every item carries 6 prices (excl VAT), worked out from cost by ${P.basis==="margin"?"margin":"markup"}: ${P.labels.map((lb,l)=>`${esc(lb)} ${isNum(P.pcts[l])?P.pcts[l]+"%":"—"}`).join(" · ")}${P.round>0?` · VAT-inclusive prices rounded up to R${P.round}`:""}. Change the defaults under Setup. Each branch keeps its own stock count.</div>
     <div class="kpis" style="margin-bottom:14px">
       ${!can("seeCost")?"":br.map(([k,v])=>`<div class="kpi"><div class="l">Stock value — ${v}</div><div class="v">${fmt(totVal(k))}</div></div>`).join("")}
@@ -1161,15 +1186,39 @@ const Views = {
       ${br.map(([k,v])=>`<th class="r" style="${sc===k?'color:var(--brand)':''}">${v}</th>`).join("")}<th class="r" style="${sc==='ALL'?'color:var(--brand)':''}">Total</th>${can("seeCost")?`<th class="r">Value (${sc==="ALL"?"combined":App.branches[sc]})</th>`:""}<th></th></tr></thead>
       <tbody id="iRows"></tbody></table></div>`:`<div class="empty">No stock items yet.</div>`}`+Views._transfers();
   },
+  kits(){
+    const kits=sortedItems().filter(isKit);
+    const br=Object.entries(App.branches).filter(([k])=>can("br_"+k));
+    return `<div class="banner">A kit is sold like any product (till, quotes, invoices). Selling one takes each part off stock in that branch; its cost is the cost of the parts, and "can make" shows how many kits the parts on hand allow.</div>
+    <div class="toolbar"><button class="btn p" onclick="Forms.kit()">+ New kit</button>
+      <input class="search" style="max-width:320px" placeholder="Search kits…" value="${esc(App.kitQ||"")}" oninput="App.kitQ=this.value;Views._kitFill()">
+      <span class="muted" id="kitCount" style="font-size:12px"></span></div>
+    ${kits.length?`<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Kit</th><th>Made up of</th>${can("seeCost")?'<th class="r">Cost</th>':''}<th>Prices (excl VAT)</th>
+      ${br.map(([k,v])=>`<th class="r">Can make — ${v}</th>`).join("")}<th></th></tr></thead><tbody id="kRows"></tbody></table></div>`
+      :`<div class="empty">No kits yet. Tap <b>+ New kit</b> and pick the products that go into it.</div>`}`;
+  },
+  _kitFill(){
+    const tb=document.getElementById("kRows"); if(!tb) return;
+    const br=Object.entries(App.branches).filter(([k])=>can("br_"+k));
+    const q=String(App.kitQ||"").trim().toLowerCase(), words=q?q.split(/\s+/):[];
+    const list=sortedItems().filter(isKit).filter(i=>{ const h=((i.name||"")+" "+(i.code||"")+" "+(i.barcode||"")).toLowerCase(); return words.every(w=>h.includes(w)); });
+    tb.innerHTML=list.map(i=>`<tr><td>${esc(i.code||"")}</td><td><b>${esc(i.name)}</b></td>
+      <td class="muted" style="font-size:12px">${kitParts(i).map(p=>`${p.qty} × ${esc(p.item.name)}`).join("<br>")}</td>
+      ${can("seeCost")?`<td class="r">${fmt(costOf(i))}</td>`:""}<td>${Views._priceStack(i)}</td>
+      ${br.map(([k])=>`<td class="r"><b>${qtyOf(i,k)}</b></td>`).join("")}
+      <td class="r"><button class="btn sm" onclick="Forms.kit('${i.id}')">Edit</button></td></tr>`).join("")
+      || `<tr><td colspan="9" class="muted" style="padding:20px;text-align:center">No kit matches.</td></tr>`;
+    const c=document.getElementById("kitCount"); if(c) c.textContent=list.length+" kit"+(list.length===1?"":"s");
+  },
   _invFill(){
     const tb=document.getElementById("iRows"); if(!tb) return;
     const br=Object.entries(App.branches).filter(([k])=>can("br_"+k)), sc=scope();
     const r=findItems(App.invQ,200);
-    tb.innerHTML=r.list.map(i=>`<tr><td>${esc(i.code||"")}</td><td>${esc(i.name)}${i.unit?` <span class="muted" style="font-size:11px">(${esc(i.unit)})</span>`:""}</td><td class="muted">${esc(i.bin||"")}</td>
-      ${can("seeCost")?`<td class="r">${i.cost?fmt(i.cost):'<span class="muted">—</span>'}</td>`:""}<td>${Views._priceStack(i)}</td>
+    tb.innerHTML=r.list.map(i=>`<tr><td>${esc(i.code||"")}</td><td>${isKit(i)?'<span class="tag">KIT</span> ':''}${esc(i.name)}${i.unit?` <span class="muted" style="font-size:11px">(${esc(i.unit)})</span>`:""}</td><td class="muted">${esc(i.bin||"")}</td>
+      ${can("seeCost")?`<td class="r">${costOf(i)?fmt(costOf(i)):'<span class="muted">—</span>'}</td>`:""}<td>${Views._priceStack(i)}</td>
       ${br.map(([k])=>{const q=qtyOf(i,k);return `<td class="r" style="${q<0?'color:var(--bad)':''}">${q}</td>`;}).join("")}
-      <td class="r"><b>${br.reduce((x,[k])=>x+qtyOf(i,k),0)}</b></td>${can("seeCost")?`<td class="r">${fmt(money(qtyOf(i,sc)*(+i.cost||0)))}</td>`:""}
-      <td class="r"><button class="btn sm" onclick="Forms.item('${i.id}')">Edit</button></td></tr>`).join("")
+      <td class="r"><b>${br.reduce((x,[k])=>x+qtyOf(i,k),0)}</b></td>${can("seeCost")?`<td class="r">${isKit(i)?'<span class="muted" title="counted in its parts">—</span>':fmt(money(qtyOf(i,sc)*(+i.cost||0)))}</td>`:""}
+      <td class="r"><button class="btn sm" onclick="${isKit(i)?(can("kits")?`Forms.kit('${i.id}')`:"toast('You need the Kits right to change a kit')"):`Forms.item('${i.id}')`}">Edit</button></td></tr>`).join("")
       || `<tr><td colspan="9" class="muted" style="padding:20px;text-align:center">No product matches.</td></tr>`;
     const c=document.getElementById("invCount");
     if(c) c.textContent = r.total>r.list.length ? `Showing ${r.list.length} of ${r.total} — search to narrow down` : `${r.total} shown`;
@@ -1410,7 +1459,81 @@ const Forms = {
       ${id?`<button class="btn" onclick="Actions.copyParty('suppliers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
       ${id?`<button class="btn d" onclick="Actions.delParty('suppliers','${id}')">Delete</button>`:''}</div>`);
   },
+  /* ---- Kit: pick the products that make it up ---- */
+  kit(id){
+    if(!can("kits")){ toast("You need the Kits right"); return; }
+    const k=id?Store.get("items",id):null;
+    Forms._kit={id:id||null, parts:k?(k.kit||[]).map(p=>({id:p.id,qty:+p.qty||1})):[], kitPrice:k?(k.kitPrice||"sum"):"sum",
+      kitDisc:k?(+k.kitDisc||0):0, own:k&&k.kitPrice==="own"?pricesOf(k):Array(6).fill(null)};
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} kit</h2>
+      <div class="grid2">
+        <div class="f"><label>Kit code</label><input id="k_code" value="${esc(k?k.code||'':'')}"></div>
+        <div class="f"><label>Kit description *</label><input id="k_name" value="${esc(k?k.name||'':'')}" placeholder="e.g. D5 Evo gate motor kit complete"></div>
+        <div class="f"><label>Barcode</label><input id="k_barcode" value="${esc(k?k.barcode||'':'')}" placeholder="scan or type"></div>
+        <div class="f"><label>Unit</label><input id="k_unit" value="${esc(k?k.unit||'kit':'kit')}"></div>
+      </div>
+      <h3 style="margin:6px 0 8px;font-size:13px;color:var(--muted)">PRODUCTS IN THIS KIT</h3>
+      <div style="position:relative"><input class="search" id="k_find" placeholder="Type to find a product by code, description or barcode, then tap it…" oninput="Forms._kitFind(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();Forms._kitFind(this.value,true);}">
+        <div id="k_hits"></div></div>
+      <div class="tbl-wrap" style="margin-top:8px"><table class="linetbl"><thead><tr><th>Product</th><th style="width:80px">Qty</th>${can("seeCost")?'<th class="r">Cost</th>':''}<th class="r">${esc(Pricing().labels[0])} excl</th><th class="r">On hand ${esc(App.branches[App.branch])}</th><th></th></tr></thead>
+        <tbody id="k_parts"></tbody></table></div>
+      <h3 style="margin:14px 0 8px;font-size:13px;color:var(--muted)">KIT SELLING PRICES</h3>
+      <div class="grid2">
+        <div class="f"><label>Price the kit as</label><select id="k_mode" onchange="Forms._kit.kitPrice=this.value;Forms._kitDraw()">
+          <option value="sum" ${Forms._kit.kitPrice==="sum"?"selected":""}>Total of the products' prices (follows their price changes)</option>
+          <option value="cost" ${Forms._kit.kitPrice==="cost"?"selected":""}>Kit cost + the default % from Setup</option>
+          <option value="own" ${Forms._kit.kitPrice==="own"?"selected":""} ${can("editPrices")?"":"disabled"}>Own fixed prices${can("editPrices")?"":" (needs price rights)"}</option></select></div>
+        <div class="f" id="k_discf"><label>Kit discount % off the total (0 = none; discounted prices round up to R${Pricing().round||1})</label><input id="k_disc" type="number" min="0" max="99" step="0.5" value="${Forms._kit.kitDisc||0}" oninput="Forms._kit.kitDisc=+this.value||0;Forms._kitDraw()"></div>
+      </div>
+      <div id="k_prices"></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button class="btn p" onclick="Actions.saveKit()">Save kit</button>
+      ${id?`<button class="btn d" onclick="Actions.delRec('items','${id}')">Delete kit</button>`:''}<button class="btn" onclick="closeModal()">Cancel</button></div>`, true);
+    Forms._kitDraw();
+  },
+  _kitFind(q,enter){
+    const box=document.getElementById("k_hits"); if(!box) return;
+    if(!String(q||"").trim()){ box.innerHTML=""; return; }
+    const r=findItems(q,40), have=new Set(Forms._kit.parts.map(p=>p.id));
+    const list=r.list.filter(i=>!isKit(i)&&!have.has(i.id)&&i.id!==Forms._kit.id).slice(0,8);
+    if(enter && list.length && (r.exact || list.length===1)){ Forms._kitAdd((r.exact&&!isKit(r.exact)&&!have.has(r.exact.id)?r.exact:list[0]).id); return; }
+    box.innerHTML=`<div class="card" style="padding:4px;margin:4px 0">${list.map(i=>`<div style="padding:8px;cursor:pointer;border-bottom:1px solid var(--line)" onclick="Forms._kitAdd('${i.id}')">
+      <b>${esc(i.code||"")}</b> ${esc(i.name)} <span class="muted" style="float:right">${priceOf(i,0)!=null?fmt(priceOf(i,0)):""}</span></div>`).join("")||'<div class="muted" style="padding:8px">No product matches.</div>'}</div>`;
+  },
+  _kitAdd(itemId){
+    const ex=Forms._kit.parts.find(p=>p.id===itemId);
+    if(ex) ex.qty+=1; else Forms._kit.parts.push({id:itemId,qty:1});
+    const f=document.getElementById("k_find"); if(f){ f.value=""; f.focus(); }
+    document.getElementById("k_hits").innerHTML=""; Forms._kitDraw();
+  },
+  _kitPreview(){
+    const K=Forms._kit;
+    return {kit:K.parts.filter(p=>p.qty>0), kitPrice:K.kitPrice, kitDisc:K.kitDisc, prices:K.own.slice()};
+  },
+  _kitDraw(){
+    const K=Forms._kit, P=Pricing();
+    document.getElementById("k_parts").innerHTML = K.parts.map((p,i)=>{ const it=Store.get("items",p.id); if(!it) return "";
+      return `<tr><td><b>${esc(it.code||"")}</b> ${esc(it.name)}</td>
+        <td><input type="number" min="0" step="any" value="${p.qty}" oninput="Forms._kit.parts[${i}].qty=+this.value||0;Forms._kitTotals()"></td>
+        ${can("seeCost")?`<td class="r">${fmt((+it.cost||0)*p.qty)}</td>`:""}
+        <td class="r">${priceOf(it,0)!=null?fmt(priceOf(it,0)*p.qty):'<span style="color:var(--bad)">no price</span>'}</td>
+        <td class="r">${qtyOf(it,App.branch)}</td>
+        <td><span style="cursor:pointer;color:var(--bad)" onclick="Forms._kit.parts.splice(${i},1);Forms._kitDraw()">✕</span></td></tr>`; }).join("")
+      || `<tr><td colspan="6" class="muted" style="padding:14px;text-align:center">No products yet — search above and tap a product to add it.</td></tr>`;
+    document.getElementById("k_discf").style.display = K.kitPrice==="sum" ? "" : "none";
+    Forms._kitTotals();
+  },
+  _kitTotals(){
+    const K=Forms._kit, P=Pricing(), prev=Forms._kitPreview(), pr=pricesOf(prev);
+    const own=K.kitPrice==="own";
+    document.getElementById("k_prices").innerHTML=`<table class="linetbl"><thead><tr><th>Price level</th><th style="width:130px">Excl VAT</th><th class="r" style="width:120px">Incl VAT</th></tr></thead><tbody>
+      ${P.labels.map((lb,l)=>`<tr><td><b>${esc(lb)}</b></td>
+        <td>${own?`<input type="number" step="0.01" value="${isNum(K.own[l])?K.own[l]:''}" placeholder="—" oninput="Forms._kit.own[${l}]=this.value===''?null:+this.value;document.getElementById('k_inc_${l}').textContent=this.value===''?'—':fmt(+this.value*(1+VAT_RATE))">`:(pr[l]!=null?fmt(pr[l]):'<span class="muted">—</span>')}</td>
+        <td class="r muted" id="k_inc_${l}">${pr[l]!=null?fmt(pr[l]*(1+VAT_RATE)):'—'}</td></tr>`).join("")}
+      </tbody></table>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">${can("seeCost")?`Kit cost: <b>${fmt(costOf(prev))}</b> · `:""}Can make now in ${esc(App.branches[App.branch])}: <b>${qtyOf(prev,App.branch)}</b>${K.kitPrice==="sum"&&prev.kit.some(p=>{const it=Store.get("items",p.id);return it&&P.labels.some((_,l)=>priceOf(it,l)==null);})?" · a level shows — when one of the products has no price at that level":""}</p>`;
+  },
   item(id){
+    if(id && isKit(Store.get("items",id))) return Forms.kit(id);
     const i=id?Store.get("items",id):{pcts:Pricing().pcts.slice()};
     const P=Pricing(), pc=pctsOf(i), pr=pricesOf(i);
     modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} stock item</h2>
@@ -1639,7 +1762,7 @@ const Forms = {
     Forms.tfRender();
   },
   tfRender(){
-    const t=Forms._tf, items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
+    const t=Forms._tf, items=sortedItems().filter(x=>!isKit(x));
     document.getElementById("tfLines").innerHTML=t.lines.map((l,i)=>{
       const it=l.itemId?Store.get("items",l.itemId):null;
       return `<tr>
@@ -1916,14 +2039,14 @@ const Actions = {
     App.posLevel=null; toast("Price levels saved");
   },
   repriceAsk(){
-    const n=Store.all("items").length;
+    const n=Store.all("items").filter(it=>!isKit(it)).length;
     modal(`<span class="close" onclick="closeModal()">✕</span><h2>Re-price all stock?</h2>
       <p>This sets the saved default % on <b>all ${n} items</b> and recalculates all six selling prices from each item's cost. Any % you set on individual items will be replaced. Save the price levels first if you changed them.</p>
       <div style="display:flex;gap:8px"><button class="btn p" onclick="Actions.repriceAll()">Yes, re-price ${n} items</button><button class="btn" onclick="closeModal()">Cancel</button></div>`);
   },
   async repriceAll(){
     const P=Pricing(); let n=0;
-    const all=Store.all("items").map(it=>{ const c=JSON.parse(JSON.stringify(it)); c.pcts=P.pcts.slice(); return repriceItem(c); });
+    const all=Store.all("items").filter(it=>!isKit(it)).map(it=>{ const c=JSON.parse(JSON.stringify(it)); c.pcts=P.pcts.slice(); return repriceItem(c); });
     try{ n=await Store.bulkPut("items",all); }catch(e){ return; }
     closeModal(); toast(n+" items re-priced");
   },
@@ -1973,6 +2096,24 @@ const Actions = {
     const old=id?Store.get("suppliers",id):{};
     await Store.put("suppliers",{...old,id:id||undefined,branch,name:g("su_name"),contact:g("su_contact"),phone:g("su_phone"),acc:g("su_acc")});
     closeModal();toast("Supplier saved");
+  },
+  async saveKit(){
+    const K=Forms._kit, g=x=>document.getElementById(x).value.trim();
+    if(!can("kits")){ toast("You need the Kits right"); return; }
+    if(!g("k_name")){ toast("Give the kit a description"); return; }
+    const parts=K.parts.filter(p=>p.qty>0);
+    if(!parts.length){ toast("Add at least one product to the kit"); return; }
+    const code=g("k_code");
+    if(code && Store.all("items").some(i=>i.id!==K.id && (i.code||"").toLowerCase()===code.toLowerCase())){ toast("Code "+code+" is already used by another product"); return; }
+    const old=K.id?Store.get("items",K.id):null;
+    const rec={...(old||{}), id:K.id||("k_"+uid()), code, name:g("k_name"), barcode:g("k_barcode"), unit:g("k_unit")||"kit",
+      kit:parts.map(p=>({id:p.id,qty:p.qty})), kitPrice:K.kitPrice, kitDisc:K.kitPrice==="sum"?(+K.kitDisc||0):0};
+    if(K.kitPrice==="own"){ if(!can("editPrices")){ toast("Own prices need the price-change right"); return; }
+      rec.prices=K.own.map(v=>isNum(v)?money(+v):null); rec.price=rec.prices[0]; }
+    else if(!old){ delete rec.prices; delete rec.price; }
+    delete rec.stock; delete rec.qty; delete rec.cost; delete rec.pcts;
+    await Store.put("items",rec);
+    closeModal(); toast("Kit saved — "+rec.name);
   },
   async saveItem(id){
     const g=x=>document.getElementById(x).value;
@@ -2056,8 +2197,9 @@ const Actions = {
     ];
     // cost of sales + stock reduction
     let cos=0;
-    d.lines.forEach(l=>{ if(l.itemId){ const it=Store.get("items",l.itemId); if(it){ cos+=money((it.cost||0)*(l.qty||0));
-      addQty(it,d.branch||App.branch,-(l.qty||0)); Store.put("items",it); } }});
+    const touched=new Map();
+    d.lines.forEach(l=>{ if(l.itemId){ const it=Store.get("items",l.itemId); if(it) cos+=moveStock(it,d.branch||App.branch,-(l.qty||0),touched); }});
+    touched.forEach(it=>Store.put("items",it)); cos=money(cos);
     if(cos>0){ lines.push({account:ACC.cos,debit:cos,credit:0}); lines.push({account:ACC.stock,debit:0,credit:cos}); }
     await Post.journal({source:"invoice",ref:d.no,memo:"Invoice "+(cust?cust.name:""),date:d.date,branch:d.branch,
       projectId:d.projectId, party:{kind:"customer",id:d.customerId}, lines});
@@ -2156,7 +2298,9 @@ const Actions = {
     const debitAcc = method==="cash"?ACC.till:bankAcc;
     const lines=[{account:debitAcc,debit:tot,credit:0},{account:ACC.salesPOS,debit:0,credit:sub},{account:ACC.vatOut,debit:0,credit:vat}];
     let cos=0;
-    App.cart.forEach(l=>{ if(l.itemId){ const it=Store.get("items",l.itemId); if(it){ cos+=money((it.cost||0)*l.qty); addQty(it,App.branch,-l.qty); Store.put("items",it);}}});
+    const touched=new Map();
+    App.cart.forEach(l=>{ if(l.itemId){ const it=Store.get("items",l.itemId); if(it) cos+=moveStock(it,App.branch,-l.qty,touched); }});
+    touched.forEach(it=>Store.put("items",it)); cos=money(cos);
     if(cos>0){ lines.push({account:ACC.cos,debit:cos,credit:0}); lines.push({account:ACC.stock,debit:0,credit:cos}); }
     await Post.journal({source:"pos",ref:no,memo:"POS sale ("+method+")",date:today(),branch:App.branch,lines});
     App.cart=[]; toast("Sale "+no+" — "+fmt(tot)+" ("+method+")"); App.render();
