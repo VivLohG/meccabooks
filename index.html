@@ -321,6 +321,23 @@ const Store = {
     delete this.data[coll][id]; this._keep(coll,id,null); this._emit();
     return true;
   },
+  /* save many records at once (product import, re-price all): 500 rows per request */
+  async bulkPut(coll,objs,onProgress){
+    const sb=this.client(), shared=SHARED_COLLS.has(coll); let done=0;
+    for(let i=0;i<objs.length;i+=500){
+      const part=objs.slice(i,i+500).map(o=>{ if(!o.id) o.id=uid(); if(!shared && !o.branch) o.branch=recBranch(o);
+        return {coll,id:o.id,branch:shared?null:o.branch,data:this._clean(o)}; });
+      const { data, error } = await sb.from("docs").upsert(part,{onConflict:"coll,id"}).select("id");
+      if(error || !data || data.length!==part.length){
+        await this.loadAll();
+        const msg="Stopped after "+done+" of "+objs.length+" — "+(error?niceErr(error):"you don't have the right to do that");
+        toast(msg); throw new Error(msg); }
+      part.forEach((r,k)=>{ const o=objs[i+k]; o._by=this.uid; o._at=Date.now(); this.data[coll][o.id]=o; this._keep(coll,o.id,o); });
+      done+=part.length; if(coll==="items") this._iv=(this._iv||0)+1;
+      if(onProgress) onProgress(done,objs.length);
+    }
+    this._emit(); return done;
+  },
   onChange(fn){ this.listeners.push(fn); },
   _emit(){ this.listeners.forEach(f=>{try{f();}catch(e){console.error(e);}}); },
   _emitSoon(){ clearTimeout(this._et); this._et=setTimeout(()=>this._emit(),150); }
@@ -497,6 +514,109 @@ function repriceItem(it){
   pc.forEach((x,l)=>{ const v=priceFrom(it.cost,x,b); if(v!=null) pr[l]=v; });
   it.pcts=pc; it.prices=pr; it.price=pr[0]; delete it.markup;
   return it;
+}
+
+/* ---- reading a spreadsheet the user picks (.xlsx or .csv) — no outside library ---- */
+async function readSheet(file){
+  const buf=await file.arrayBuffer();
+  if(/\.csv$/i.test(file.name)) return parseCSV(new TextDecoder().decode(buf));
+  const u8=new Uint8Array(buf), dv=new DataView(buf), td=new TextDecoder();
+  let e=-1; for(let i=u8.length-22;i>=Math.max(0,u8.length-65557);i--) if(dv.getUint32(i,true)===0x06054b50){e=i;break;}
+  if(e<0) throw new Error("That isn't an .xlsx or .csv file");
+  const files={}; let p=dv.getUint32(e+16,true);
+  for(let k=0,n=dv.getUint16(e+10,true);k<n;k++){
+    const nl=dv.getUint16(p+28,true), xl=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true);
+    files[td.decode(u8.subarray(p+46,p+46+nl))]={method:dv.getUint16(p+10,true),size:dv.getUint32(p+20,true),off:dv.getUint32(p+42,true)};
+    p+=46+nl+xl+cl; }
+  async function text(name){
+    const f=files[name]; if(!f) return null;
+    const st=f.off+30+dv.getUint16(f.off+26,true)+dv.getUint16(f.off+28,true), data=u8.slice(st,st+f.size);
+    if(f.method===0) return td.decode(data);
+    return await new Response(new Response(data).body.pipeThrough(new DecompressionStream("deflate-raw"))).text(); }
+  const xml=t=>new DOMParser().parseFromString(t,"application/xml");
+  // first sheet (or one called "Products")
+  let sheet="xl/worksheets/sheet1.xml";
+  const wb=await text("xl/workbook.xml"), rels=await text("xl/_rels/workbook.xml.rels");
+  if(wb && rels){
+    const sh=[...xml(wb).getElementsByTagName("sheet")];
+    const pick=sh.find(x=>/^products?$/i.test(x.getAttribute("name")))||sh[0];
+    const rid=pick && (pick.getAttribute("r:id")||pick.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id"));
+    const rel=[...xml(rels).getElementsByTagName("Relationship")].find(r=>r.getAttribute("Id")===rid);
+    if(rel){ const t=rel.getAttribute("Target"); sheet=t.startsWith("/")?t.slice(1):"xl/"+t.replace(/^\.\//,""); } }
+  const ssT=await text("xl/sharedStrings.xml");
+  const ss=ssT?[...xml(ssT).getElementsByTagName("si")].map(si=>[...si.getElementsByTagName("t")].map(t=>t.textContent).join("")):[];
+  const shT=await text(sheet); if(!shT) throw new Error("Couldn't find the first sheet in that file");
+  const rows=[];
+  for(const r of xml(shT).getElementsByTagName("row")){
+    const row=[];
+    for(const c of r.getElementsByTagName("c")){
+      const ref=c.getAttribute("r")||""; let ci=0; for(const ch of ref.replace(/\d+/g,"")) ci=ci*26+ch.charCodeAt(0)-64; ci=ci?ci-1:row.length;
+      const t=c.getAttribute("t"), v=c.getElementsByTagName("v")[0];
+      let val=null;
+      if(t==="s") val=v?ss[+v.textContent]:null;
+      else if(t==="inlineStr") val=[...c.getElementsByTagName("t")].map(x=>x.textContent).join("");
+      else if(t==="str"||t==="e") val=v?v.textContent:null;
+      else if(t==="b") val=v?v.textContent==="1":null;
+      else if(v) val=+v.textContent;
+      row[ci]=val; }
+    rows[(+r.getAttribute("r")||rows.length+1)-1]=row; }
+  return Array.from(rows,r=>r||[]);
+}
+function parseCSV(t){
+  const rows=[]; let row=[], f="", q=false;
+  const sep=(t.split("\n")[0].match(/;/g)||[]).length>(t.split("\n")[0].match(/,/g)||[]).length?";":",";
+  for(let i=0;i<t.length;i++){ const ch=t[i];
+    if(q){ if(ch==='"'){ if(t[i+1]==='"'){f+='"';i++;} else q=false; } else f+=ch; }
+    else if(ch==='"') q=true; else if(ch===sep){ row.push(f); f=""; }
+    else if(ch==="\n"||ch==="\r"){ if(ch==="\r"&&t[i+1]==="\n") i++; row.push(f); rows.push(row); row=[]; f=""; }
+    else f+=ch; }
+  if(f!==""||row.length){ row.push(f); rows.push(row); }
+  return rows;
+}
+const itemIdFor = code => "p_"+String(code).trim().replace(/[^A-Za-z0-9_-]/g,"_");
+/* turn sheet rows into product records; matches columns by their heading */
+function buildProductImport(rows, updateExisting, src){
+  const hi=rows.slice(0,15).findIndex(r=>(r||[]).some(h=>/^(item |stock |product )?code$/i.test(String(h||"").trim())));
+  if(hi<0) throw new Error("No 'Code' column heading found in the first rows");
+  const H=rows[hi].map(h=>String(h==null?"":h).trim().toLowerCase());
+  const col=re=>H.findIndex(h=>re.test(h));
+  const C={code:col(/^(item |stock |product )?code$/), name:col(/desc|^name$|^product name$/), unit:col(/^unit$|^uom$|unit of measure/),
+    bin:col(/^bin/), barcode:col(/barcode/), cost:col(/cost/), note:col(/^note/)};
+  if(C.name<0) throw new Error("No 'Description' column heading found");
+  const P=Pricing(), lv=P.labels.map(lb=>{ lb=lb.toLowerCase();
+    const ex=H.findIndex(h=>h.startsWith(lb) && /excl/.test(h)); if(ex>=0) return {i:ex,inc:false};
+    const pl=H.findIndex(h=>h===lb || h===lb+" price"); if(pl>=0) return {i:pl,inc:false};
+    const inc=H.findIndex(h=>h.startsWith(lb) && /incl/.test(h)); return inc>=0?{i:inc,inc:true}:null; });
+  const num=v=>{ if(v==null||v==="") return null; const n=typeof v==="number"?v:+String(v).replace(/[R\s,]/g,""); return isFinite(n)?n:null; };
+  const str=(r,i)=>i<0||r[i]==null?"":String(r[i]).trim();
+  const byCode={}; Store.all("items").forEach(it=>{ if(it.code) byCode[String(it.code).trim().toLowerCase()]=it; });
+  const seen={}, out=[]; let isNew=0, isUpd=0, skipped=0, noCode=0;
+  const zero=()=>Object.fromEntries(Object.keys(App.branches).map(b=>[b,0]));
+  for(const r of rows.slice(hi+1)){
+    if(!r || !r.some(v=>v!=null&&v!=="")) continue;
+    const code=str(r,C.code), name=str(r,C.name);
+    if(!code || !name){ noCode++; continue; }
+    const key=code.toLowerCase(), old=byCode[key];
+    if(old && !updateExisting){ skipped++; continue; }
+    const cost=C.cost>=0?num(r[C.cost]):null;
+    const listed=lv.map(m=>{ if(!m) return null; const v=num(r[m.i]); return v==null||v<=0?null:Math.round((m.inc?v/(1+VAT_RATE):v)*10000)/10000; });
+    const base=old?JSON.parse(JSON.stringify(old)):{id:itemIdFor(code),stock:zero()};
+    const rec={...base,code,name};
+    if(C.unit>=0) rec.unit=str(r,C.unit); if(C.bin>=0) rec.bin=str(r,C.bin); if(C.barcode>=0) rec.barcode=str(r,C.barcode);
+    if(C.note>=0 && str(r,C.note)) rec.note=str(r,C.note);
+    if(cost!=null) rec.cost=cost; else if(!old) rec.cost=0;
+    const hasCost=(+rec.cost||0)>0;
+    if(listed.some(x=>x!=null)){
+      const N6=[null,null,null,null,null,null], pr=old?pricesOf(old).slice():N6.slice(), pc=old?pctsOf(old).slice():N6.slice();
+      listed.forEach((x,l)=>{ if(x!=null){ pr[l]=x; pc[l]=hasCost&&isNum(P.pcts[l])?P.pcts[l]:null; } });
+      rec.prices=pr; rec.pcts=pc; rec.price=pr[0];
+    } else if(hasCost){ rec.pcts=P.pcts.slice(); repriceItem(rec); }
+    else if(!old){ rec.prices=[null,null,null,null,null,null]; rec.pcts=[null,null,null,null,null,null]; rec.price=null; }
+    rec.src=src; delete rec.markup; delete rec.qty;
+    if(seen[key]!=null){ out[seen[key]]=rec; continue; }   // same code twice in the file: last one wins
+    seen[key]=out.length; out.push(rec); old?isUpd++:isNew++;
+  }
+  return {items:out,isNew,isUpd,skipped,noCode,levels:lv.map((m,l)=>m?P.labels[l]:null).filter(Boolean),hasCost:C.cost>=0};
 }
 
 /* ---- product search (thousands of products: never draw them all at once) ---- */
@@ -1235,6 +1355,11 @@ const Views = {
       <button class="btn p" onclick="Actions.saveCompany()">Save ${App.branches[App.branch]} details</button>
     </div>
     ${Views._pricingCard()}
+    ${can("editPrices")?`<div class="card"><h3>Import products from a spreadsheet (both branches)</h3>
+      <p class="muted" style="font-size:13px;margin-top:0">Pick an Excel (.xlsx) or .csv price list with headings such as <b>Code, Description, Unit, Bin, Barcode, Cost (excl. VAT), Trade excl., Special excl., Retail excl.</b> Products are shared by Richards Bay and Vereeniging; stock levels are never changed by an import.</p>
+      <label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="imp_upd" checked style="width:auto"> Update products that already exist (same code)</label>
+      <input type="file" id="imp_file" accept=".xlsx,.csv" onchange="Actions.importProductsFile(this)">
+    </div>`:""}
     <div class="card"><h3>Sign-in security</h3>
       <div class="f" style="max-width:320px"><label>Sign out automatically after this many idle minutes (0 = never)</label>
         <input id="sec_idle" type="number" min="0" value="${(Store.get("settings","security")||{}).idleMinutes ?? 30}"></div>
@@ -1760,6 +1885,28 @@ const Actions = {
     await Store.put("settings",{...(Store.get("settings","security")||{}),id:"security",idleMinutes:v});
     toast(v?"Idle sign-out after "+v+" min":"Idle sign-out off");
   },
+  async importProductsFile(inp){
+    const file=inp.files&&inp.files[0]; if(!file) return;
+    const upd=!!(document.getElementById("imp_upd")||{}).checked;
+    let res;
+    try{ toast("Reading "+file.name+"…"); res=buildProductImport(await readSheet(file),upd,"Import "+file.name+" "+today()); }
+    catch(e){ toast("Couldn't read that file: "+e.message); inp.value=""; return; }
+    inp.value="";
+    App._import=res.items;
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>Import ${res.items.length.toLocaleString()} products?</h2>
+      <p><b>${res.isNew.toLocaleString()}</b> new · <b>${res.isUpd.toLocaleString()}</b> already in the list (details & prices updated)${res.skipped?` · ${res.skipped.toLocaleString()} existing skipped`:""}${res.noCode?` · ${res.noCode} rows without a code or description ignored`:""}</p>
+      <p class="muted" style="font-size:13px">Prices read from: ${res.levels.length?res.levels.map(esc).join(", "):"none — selling prices are worked out from cost with the default %"}${res.hasCost?"":" · no cost column"}. Stock levels in Richards Bay and Vereeniging are not touched.</p>
+      <div id="imp_prog" class="muted" style="margin:8px 0"></div>
+      <div style="display:flex;gap:8px"><button class="btn p" id="imp_go" onclick="Actions.importProductsRun()" ${res.items.length?"":"disabled"}>Import now</button><button class="btn" onclick="closeModal()">Cancel</button></div>`);
+  },
+  async importProductsRun(){
+    const items=App._import||[]; if(!items.length) return;
+    const btn=document.getElementById("imp_go"); if(btn) btn.disabled=true;
+    const pr=document.getElementById("imp_prog");
+    try{ await Store.bulkPut("items",items,(d,n)=>{ if(pr) pr.textContent="Saved "+d.toLocaleString()+" of "+n.toLocaleString()+"…"; }); }
+    catch(e){ if(btn) btn.disabled=false; return; }
+    App._import=null; closeModal(); toast(items.length.toLocaleString()+" products imported for both branches");
+  },
   async savePricing(){
     const g=x=>document.getElementById(x).value;
     const labels=[],pcts=[];
@@ -1776,7 +1923,8 @@ const Actions = {
   },
   async repriceAll(){
     const P=Pricing(); let n=0;
-    for(const it of Store.all("items")){ it.pcts=P.pcts.slice(); repriceItem(it); await Store.put("items",it); n++; }
+    const all=Store.all("items").map(it=>{ const c=JSON.parse(JSON.stringify(it)); c.pcts=P.pcts.slice(); return repriceItem(c); });
+    try{ n=await Store.bulkPut("items",all); }catch(e){ return; }
     closeModal(); toast(n+" items re-priced");
   },
   async copyChart(from){
