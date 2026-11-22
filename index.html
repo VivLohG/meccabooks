@@ -697,6 +697,25 @@ const Scanner = {
     const o=this._ac.createOscillator(), g=this._ac.createGain(); o.frequency.value=1500; g.gain.value=0.08; o.connect(g); g.connect(this._ac.destination); o.start(); o.stop(this._ac.currentTime+0.08); }catch(e){} }
 };
 
+/* ---- ACCOUNT CODES (Pastel style): customers & suppliers get e.g. SEC001 — 3 letters of the name + number, unique per branch ---- */
+function codePrefix(name){ const l=String(name||"").toUpperCase().replace(/^THE\s+/,"").replace(/[^A-Z0-9]/g,""); return (l+"XXX").slice(0,3); }
+function nextPartyCode(coll,name,branch,exceptId){
+  const pre=codePrefix(name), used=new Set(Store.all(coll).filter(x=>inBranch(x,branch)&&x.id!==exceptId).map(x=>String(x.code||"").toUpperCase()));
+  for(let n=1;n<10000;n++){ const c=pre+String(n).padStart(3,"0"); if(!used.has(c)) return c; }
+  return pre+Date.now().toString().slice(-6);
+}
+function partyCodeTaken(coll,code,branch,exceptId){ code=String(code||"").trim().toUpperCase();
+  return !!code && Store.all(coll).some(x=>x.id!==exceptId && inBranch(x,branch) && String(x.code||"").toUpperCase()===code); }
+const partyLabel = p => p ? (p.code?p.code+" · ":"")+(p.name||"") : "";
+const byCode = (a,b) => (a.code||"~").localeCompare(b.code||"~") || (a.name||"").localeCompare(b.name||"");
+// next free product code from the description, e.g. "Gate motor" → GAT001
+function nextItemCode(name,exceptId){
+  const pre=codePrefix(name), used=new Set(Store.all("items").filter(x=>x.id!==exceptId).map(x=>String(x.code||"").toUpperCase()));
+  for(let n=1;n<100000;n++){ const c=pre+String(n).padStart(3,"0"); if(!used.has(c)) return c; }
+}
+function itemCodeTaken(code,exceptId){ code=String(code||"").trim().toLowerCase();
+  return !!code && Store.all("items").some(x=>x.id!==exceptId && String(x.code||"").trim().toLowerCase()===code); }
+
 /* ---- product search (thousands of products: never draw them all at once) ---- */
 function sortedItems(){
   const n=Object.keys(Store.data.items||{}).length;
@@ -1090,7 +1109,7 @@ const Views = {
       <input class="search" placeholder="Search…" oninput="Views._tblFilter(this,'docRows')">
     </div>
     ${docs.length?`<div class="tbl-wrap"><table><thead><tr><th>No.</th>${scope()==="ALL"?"<th>Branch</th>":""}<th>Date</th><th>Customer</th><th>Project</th><th>Type</th><th class="r">Total</th><th>Status</th><th></th></tr></thead><tbody id="docRows">
-    ${docs.map(d=>`<tr data-s="${esc((d.no+Views._custName(d.customerId)).toLowerCase())}">
+    ${docs.map(d=>`<tr data-s="${esc((d.no+" "+Views._custName(d.customerId)+" "+((Store.get("customers",d.customerId)||{}).code||"")).toLowerCase())}">
       <td>${esc(d.no)}</td>${scope()==="ALL"?`<td class="muted">${App.branches[recBranch(d)]}</td>`:""}<td>${esc(d.date)}</td><td>${esc(Views._custName(d.customerId))}</td>
       <td class="muted">${esc(Views._projName(d.projectId))}</td>
       <td><span class="pill ${d.type==='invoice'?'inv':'q'}">${d.type}</span></td>
@@ -1105,16 +1124,18 @@ const Views = {
   _partyList(kind){
     const coll=kind==="customer"?"customers":"suppliers";
     const sc=scope();
-    const cs=Store.all(coll).filter(inScope).sort((a,b)=>a.name.localeCompare(b.name));
+    const cs=Store.all(coll).filter(inScope).sort(byCode);
     const isC=kind==="customer";
+    const noCode=cs.filter(c=>!c.code).length;
     const word=isC?"Owing":"Owed", color=isC?"var(--good)":"var(--bad)";
     const tot=money(cs.reduce((x,c)=>x+Ledger.partyBalance(kind,c.id,recBranch(c)),0));
     return Views._scopeSel()+`<div class="toolbar"><button class="btn p" onclick="Forms.${kind}()">+ New ${App.branches[App.branch]} ${kind}</button>
-      <input class="search" placeholder="Search…" oninput="Views._tblFilter(this,'${kind}Rows')">
-      <span class="muted">${cs.length} ${coll} · ${word.toLowerCase()} ${fmt(tot)}</span></div>
-    ${cs.length?`<div class="tbl-wrap"><table><thead><tr><th>Name</th>${sc==="ALL"?"<th>Branch</th>":""}<th>Contact</th><th>Phone</th>${isC?"<th>VAT No.</th><th>Price level</th>":""}<th class="r">${word}</th><th></th></tr></thead><tbody id="${kind}Rows">
-    ${cs.map(c=>{const bal=Ledger.partyBalance(kind,c.id,recBranch(c));return `<tr data-s="${esc((c.name||"").toLowerCase())}">
-      <td><b>${esc(c.name)}</b></td>${sc==="ALL"?`<td class="muted">${App.branches[recBranch(c)]}</td>`:""}<td>${esc(c.contact||"")}</td><td>${esc(c.phone||"")}</td>
+      <input class="search" placeholder="Search code or name…" oninput="Views._tblFilter(this,'${kind}Rows')">
+      <span class="muted">${cs.length} ${coll} · ${word.toLowerCase()} ${fmt(tot)}</span>
+      ${noCode?`<button class="btn" onclick="Actions.assignPartyCodes('${coll}')">Give codes to ${noCode} without one</button>`:""}</div>
+    ${cs.length?`<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Name</th>${sc==="ALL"?"<th>Branch</th>":""}<th>Contact</th><th>Phone</th>${isC?"<th>VAT No.</th><th>Price level</th>":""}<th class="r">${word}</th><th></th></tr></thead><tbody id="${kind}Rows">
+    ${cs.map(c=>{const bal=Ledger.partyBalance(kind,c.id,recBranch(c));return `<tr data-s="${esc(((c.code||"")+" "+(c.name||"")).toLowerCase())}">
+      <td><b>${esc(c.code||"—")}</b></td><td>${esc(c.name)}</td>${sc==="ALL"?`<td class="muted">${App.branches[recBranch(c)]}</td>`:""}<td>${esc(c.contact||"")}</td><td>${esc(c.phone||"")}</td>
       ${isC?`<td class="muted">${esc(c.vat||"")}</td><td>${esc(Pricing().labels[isNum(c.priceLevel)?+c.priceLevel:Pricing().custLevel])}</td>`:""}
       <td class="r" style="color:${Math.abs(bal)>0.01?color:'var(--muted)'}">${fmt(bal)}</td>
       <td class="r"><button class="btn sm" onclick="Forms.${kind}('${c.id}')">Edit</button></td></tr>`;}).join("")}
@@ -1561,7 +1582,8 @@ const Forms = {
     const cb=id?recBranch(c):App.branch, ob=Object.keys(App.branches).find(k=>k!==cb);
     modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} customer · ${App.branches[cb]}</h2>
       <div class="grid2">
-        <div class="f"><label>Name *</label><input id="c_name" value="${esc(c.name||'')}"></div>
+        <div class="f"><label>Name *</label><input id="c_name" value="${esc(c.name||'')}" oninput="Forms._autoCode('c','customers','${cb}','${id||''}')"></div>
+        <div class="f"><label>Customer code (account no.)</label><input id="c_code" value="${esc(c.code||(id?nextPartyCode('customers',c.name,cb,id):''))}" data-auto="${c.code?'':'1'}" oninput="this.dataset.auto='';this.value=this.value.toUpperCase()" placeholder="e.g. SEC001 — filled in from the name"></div>
         <div class="f"><label>Contact person</label><input id="c_contact" value="${esc(c.contact||'')}"></div>
         <div class="f"><label>Phone</label><input id="c_phone" value="${esc(c.phone||'')}"></div>
         <div class="f"><label>Email</label><input id="c_email" value="${esc(c.email||'')}"></div>
@@ -1575,12 +1597,17 @@ const Forms = {
       ${id?`<button class="btn" onclick="Actions.copyParty('customers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
       ${id?`<button class="btn d" onclick="Actions.delParty('customers','${id}')">Delete</button>`:''}</div>`);
   },
+  _autoCode(pf,coll,branch,id){
+    const c=document.getElementById(pf+"_code"); if(!c || c.dataset.auto!=="1") return;
+    const n=document.getElementById(pf+"_name").value; c.value=n.trim()?nextPartyCode(coll,n,branch,id||null):"";
+  },
   supplier(id){
     const c=id?Store.get("suppliers",id):{};
     const cb=id?recBranch(c):App.branch, ob=Object.keys(App.branches).find(k=>k!==cb);
     modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} supplier · ${App.branches[cb]}</h2>
       <div class="grid2">
-        <div class="f"><label>Name *</label><input id="su_name" value="${esc(c.name||'')}"></div>
+        <div class="f"><label>Name *</label><input id="su_name" value="${esc(c.name||'')}" oninput="Forms._autoCode('su','suppliers','${cb}','${id||''}')"></div>
+        <div class="f"><label>Supplier code (account no.)</label><input id="su_code" value="${esc(c.code||(id?nextPartyCode('suppliers',c.name,cb,id):''))}" data-auto="${c.code?'':'1'}" oninput="this.dataset.auto='';this.value=this.value.toUpperCase()" placeholder="e.g. INH001 — filled in from the name"></div>
         <div class="f"><label>Contact person</label><input id="su_contact" value="${esc(c.contact||'')}"></div>
         <div class="f"><label>Phone</label><input id="su_phone" value="${esc(c.phone||'')}"></div>
         <div class="f"><label>Account no.</label><input id="su_acc" value="${esc(c.acc||'')}"></div>
@@ -1668,7 +1695,7 @@ const Forms = {
     const P=Pricing(), pc=pctsOf(i), pr=pricesOf(i);
     modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?'Edit':'New'} stock item</h2>
       <div class="grid2">
-        <div class="f"><label>Item code</label><input id="i_code" value="${esc(i.code||'')}"></div>
+        <div class="f"><label>Item code * <a href="#" style="font-size:11px" onclick="event.preventDefault();document.getElementById('i_code').value=nextItemCode(document.getElementById('i_name').value||'ITEM','${id||''}')">next free code</a></label><input id="i_code" value="${esc(i.code||'')}" placeholder="blank = made from the description, e.g. GAT001"></div>
         <div class="f"><label>Description *</label><input id="i_name" value="${esc(i.name||'')}"></div>
         ${can("seeCost")?`<div class="f"><label>Cost price (excl VAT)</label><input id="i_cost" type="number" step="0.01" value="${i.cost||0}" oninput="Forms._recalcItem()"></div>`:""}
         ${Object.entries(App.branches).filter(([k])=>can("br_"+k)).map(([k,v])=>`<div class="f"><label>On hand — ${v}</label><input id="i_qty_${k}" type="number" value="${qtyOf(i,k)}"></div>`).join("")}
@@ -1722,7 +1749,7 @@ const Forms = {
   document(id){
     const d=id?Store.get("documents",id):{type:"quote",date:today(),lines:[{}],branch:App.branch};
     const db=d.branch||App.branch;
-    const custs=Store.all("customers").filter(c=>inBranch(c,db)).sort((a,b)=>a.name.localeCompare(b.name));
+    const custs=Store.all("customers").filter(c=>inBranch(c,db)).sort(byCode);
     Forms._doc=JSON.parse(JSON.stringify(d)); Forms._doc.lines=Forms._doc.lines&&Forms._doc.lines.length?Forms._doc.lines:[{}];
     modal(`<span class="close" onclick="closeModal()">✕</span>
       <h2>${id?esc(d.no||'Document'):'New document'} ${d.type==='invoice'?'<span class="pill inv">Invoice</span>':'<span class="pill q">Quote</span>'}</h2>
@@ -1732,7 +1759,7 @@ const Forms = {
         <div class="f"><label>Branch</label><select id="d_branch" ${id?'disabled':''} onchange="Forms.docBranch(this.value)">${Object.entries(App.branches).map(([k,v])=>`<option value="${k}" ${(d.branch||App.branch)===k?'selected':''}>${v}</option>`).join("")}</select></div>
       </div>
       <div class="grid2">
-        <div class="f"><label>Customer * <span class="muted" id="d_lvl"></span></label><select id="d_cust" onchange="Forms._showLvl()"><option value="">— select —</option>${custs.map(c=>`<option value="${c.id}" ${d.customerId===c.id?'selected':''}>${esc(c.name)}</option>`).join("")}</select></div>
+        <div class="f"><label>Customer * <span class="muted" id="d_lvl"></span></label><select id="d_cust" onchange="Forms._showLvl()"><option value="">— select —</option>${custs.map(c=>`<option value="${c.id}" ${d.customerId===c.id?'selected':''}>${esc(partyLabel(c))}</option>`).join("")}</select></div>
         <div class="f"><label>Project</label><select id="d_project">${projectOptions(d.projectId)}</select></div>
       </div>
       <table class="linetbl"><thead><tr><th>Description</th><th style="width:90px">Qty</th><th style="width:110px">Unit price</th><th style="width:110px" class="r">Nett</th><th></th></tr></thead>
@@ -1754,25 +1781,26 @@ const Forms = {
   _showLvl(){ const el=document.getElementById("d_lvl"); if(el) el.textContent="· prices at "+Pricing().labels[Forms._docLevel()]; },
   _docLevel(){ const c=Store.get("customers",(document.getElementById("d_cust")||{}).value); return c&&isNum(c.priceLevel)?+c.priceLevel:Pricing().custLevel; },
   docBranch(b){
-    const custs=Store.all("customers").filter(c=>inBranch(c,b)).sort((x,y)=>x.name.localeCompare(y.name));
-    document.getElementById("d_cust").innerHTML=`<option value="">— select —</option>`+custs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("");
+    const custs=Store.all("customers").filter(c=>inBranch(c,b)).sort(byCode);
+    document.getElementById("d_cust").innerHTML=`<option value="">— select —</option>`+custs.map(c=>`<option value="${c.id}">${esc(partyLabel(c))}</option>`).join("");
   },
   docRenderLines(){
     const items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
     const tb=document.getElementById("docLines");
     tb.innerHTML=Forms._doc.lines.map((l,i)=>`<tr>
-      <td><input list="itemlist" value="${esc(l.desc||'')}" oninput="Forms.docLine(${i},'desc',this.value)" placeholder="Type or pick item"></td>
+      <td><input list="itemlist" value="${esc(l.desc||'')}" oninput="Forms.docLine(${i},'desc',this.value)" placeholder="Type item code or description">${l.code?`<div class="muted" style="font-size:11px">${esc(l.code)}</div>`:""}</td>
       <td><input type="number" value="${l.qty!=null?l.qty:1}" oninput="Forms.docLine(${i},'qty',this.value)"></td>
       <td><input type="number" step="0.01" value="${l.price!=null?l.price:''}" oninput="Forms.docLine(${i},'price',this.value)" ${l.itemId&&!can("editPrices")?"readonly title='Stock price - locked for your login'":""}></td>
       <td class="r">${fmt((l.qty||0)*(l.price||0))}</td>
       <td><span style="cursor:pointer;color:var(--bad)" onclick="Forms.docDelLine(${i})">✕</span></td></tr>`).join("")
-      +`<datalist id="itemlist">${items.map(i=>`<option value="${esc(i.name)}">`).join("")}</datalist>`;
+      +`<datalist id="itemlist">${items.map(i=>`<option value="${esc(i.name)}">${esc(i.code||"")}</option>`).join("")}</datalist>`;
     Forms.docTotals();
   },
   docLine(i,field,val){
     if(field==="price" && Forms._doc.lines[i].itemId && !can("editPrices")) return;
     if(field==="desc"){ Forms._doc.lines[i].desc=val;
-      const it=Store.all("items").find(x=>x.name===val);
+      const v=String(val).trim(), it=Store.all("items").find(x=>x.name===v) || Store.all("items").find(x=>codeMatch(x,v));
+      if(it && it.name!==v) Forms._doc.lines[i].desc=it.name;
       if(it && (Forms._doc.lines[i].price==null||Forms._doc.lines[i].price==="")){
         const lv=Forms._docLevel(), pv=priceOf(it,lv);
         if(pv==null) toast("No "+Pricing().labels[lv]+" price on "+it.name+" — enter it manually");
@@ -1795,10 +1823,10 @@ const Forms = {
   bill(){
     const head=`<span class="close" onclick="closeModal()">✕</span><h2>Supplier bill</h2>`;
     const b={type:"bill",date:today(),lines:[{}]};
-    const sups=Store.all("suppliers").filter(x=>inBranch(x)).sort((a,b)=>a.name.localeCompare(b.name));
+    const sups=Store.all("suppliers").filter(x=>inBranch(x)).sort(byCode);
     modal(head+`
       <div class="grid3">
-        <div class="f"><label>Supplier *</label><select id="b_sup"><option value="">—</option>${sups.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>
+        <div class="f"><label>Supplier *</label><select id="b_sup"><option value="">—</option>${sups.map(s=>`<option value="${s.id}">${esc(partyLabel(s))}</option>`).join("")}</select></div>
         <div class="f"><label>Invoice ref</label><input id="b_ref" value="${esc(b.ref||'')}"></div>
         <div class="f"><label>Date</label><input id="b_date" type="date" value="${b.date||today()}"></div>
       </div>
@@ -2202,7 +2230,10 @@ const Actions = {
     const g=x=>document.getElementById(x).value;
     if(!g("c_name")){toast("Name required");return;}
     const branch=id?recBranch(Store.get("customers",id)):App.branch;
-    await Store.put("customers",{id:id||undefined,branch,name:g("c_name"),contact:g("c_contact"),phone:g("c_phone"),
+    const code=(g("c_code").trim()||nextPartyCode("customers",g("c_name"),branch,id||null)).toUpperCase();
+    if(partyCodeTaken("customers",code,branch,id||null)){ toast("Customer code "+code+" is already used in "+App.branches[branch]); return; }
+    const oldC=id?Store.get("customers",id):{};
+    await Store.put("customers",{...oldC,id:id||undefined,branch,code,name:g("c_name"),contact:g("c_contact"),phone:g("c_phone"),
       email:g("c_email"),vat:g("c_vat"),terms:+g("c_terms"),addr:g("c_addr"),priceLevel:+(document.getElementById("c_level")?.value||0)});
     closeModal();toast("Customer saved");
   },
@@ -2210,8 +2241,15 @@ const Actions = {
     const c=Store.get(coll,id); if(!c) return;
     if(Store.all(coll).some(x=>inBranch(x,to)&&(x.name||"").toLowerCase()===(c.name||"").toLowerCase())){ toast(c.name+" already exists in "+App.branches[to]); return; }
     const {id:_,_at,_by,...rest}=c;
+    if(!rest.code || partyCodeTaken(coll,rest.code,to,null)) rest.code=nextPartyCode(coll,rest.name,to,null);
     await Store.put(coll,{...rest,branch:to});
     closeModal(); toast(c.name+" copied to "+App.branches[to]+" (separate account, starts at R 0)");
+  },
+  async assignPartyCodes(coll){
+    const list=Store.all(coll).filter(x=>!x.code && inScope(x)).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+    for(const x of list){ x.code=nextPartyCode(coll,x.name,recBranch(x),x.id); }
+    try{ await Store.bulkPut(coll,list); }catch(e){ return; }
+    toast(list.length+" codes given"); App.render();
   },
   async delParty(coll,id){
     const kind=coll==="customers"?"customer":"supplier";
@@ -2224,7 +2262,9 @@ const Actions = {
     if(!g("su_name")){toast("Name required");return;}
     const branch=id?recBranch(Store.get("suppliers",id)):App.branch;
     const old=id?Store.get("suppliers",id):{};
-    await Store.put("suppliers",{...old,id:id||undefined,branch,name:g("su_name"),contact:g("su_contact"),phone:g("su_phone"),acc:g("su_acc")});
+    const code=(g("su_code").trim()||nextPartyCode("suppliers",g("su_name"),branch,id||null)).toUpperCase();
+    if(partyCodeTaken("suppliers",code,branch,id||null)){ toast("Supplier code "+code+" is already used in "+App.branches[branch]); return; }
+    await Store.put("suppliers",{...old,id:id||undefined,branch,code,name:g("su_name"),contact:g("su_contact"),phone:g("su_phone"),acc:g("su_acc")});
     closeModal();toast("Supplier saved");
   },
   async saveKit(){
@@ -2233,7 +2273,7 @@ const Actions = {
     if(!g("k_name")){ toast("Give the kit a description"); return; }
     const parts=K.parts.filter(p=>p.qty>0);
     if(!parts.length){ toast("Add at least one product to the kit"); return; }
-    const code=g("k_code");
+    const code=g("k_code")||nextItemCode(g("k_name"),K.id);
     if(code && Store.all("items").some(i=>i.id!==K.id && (i.code||"").toLowerCase()===code.toLowerCase())){ toast("Code "+code+" is already used by another product"); return; }
     const old=K.id?Store.get("items",K.id):null;
     const rec={...(old||{}), id:K.id||("k_"+uid()), code, name:g("k_name"), barcode:g("k_barcode"), unit:g("k_unit")||"kit",
@@ -2248,6 +2288,8 @@ const Actions = {
   async saveItem(id){
     const g=x=>document.getElementById(x).value;
     if(!g("i_name")){toast("Description required");return;}
+    const icode=g("i_code").trim()||nextItemCode(g("i_name"),id||null);
+    if(itemCodeTaken(icode,id||null)){ toast("Item code "+icode+" is already used by another product"); return; }
     const el=x=>document.getElementById(x);
     const old=id?Store.get("items",id):{};
     const stock={...stockOf(old)};
@@ -2262,7 +2304,7 @@ const Actions = {
         else pcts.push(pr!==""?pctFrom(cost,+pr):null);   // no cost rights: keep % in step with the price typed
       }
     }
-    const rec={...old,id:id||undefined,code:g("i_code"),name:g("i_name"),cost,pcts,prices,price:prices[0],stock,bin:g("i_bin"),unit:g("i_unit"),barcode:g("i_barcode")};
+    const rec={...old,id:id||undefined,code:icode,name:g("i_name"),cost,pcts,prices,price:prices[0],stock,bin:g("i_bin"),unit:g("i_unit"),barcode:g("i_barcode")};
     if(!id && !can("editPrices")) repriceItem(rec);   // new item by someone who can't set prices: use default %
     delete rec.markup; delete rec.qty;
     await Store.put("items",rec);
@@ -2548,7 +2590,7 @@ const Actions = {
   printDoc(id){
     const d=Store.get("documents",id); const c=Company(recBranch(d)); const cust=Store.get("customers",d.customerId)||{};
     const w=window.open("","_blank");
-    const rows=(d.lines||[]).map(l=>`<tr><td>${esc(l.desc||"")}</td><td style="text-align:center">${l.qty||0}</td><td style="text-align:right">R&nbsp;${fmtn(l.price||0)}</td><td style="text-align:right">R&nbsp;${fmtn((l.qty||0)*(l.price||0))}</td></tr>`).join("");
+    const rows=(d.lines||[]).map(l=>`<tr><td>${esc(l.code||((Store.get("items",l.itemId)||{}).code)||"")}</td><td>${esc(l.desc||"")}</td><td style="text-align:center">${l.qty||0}</td><td style="text-align:right">R&nbsp;${fmtn(l.price||0)}</td><td style="text-align:right">R&nbsp;${fmtn((l.qty||0)*(l.price||0))}</td></tr>`).join("");
     const html=`<html><head><title>${esc(d.no)}</title><style>
       body{font-family:Arial;color:#222;padding:30px;font-size:13px}
       .hd{display:flex;justify-content:space-between;border-bottom:3px solid #f5a623;padding-bottom:12px}
@@ -2562,8 +2604,8 @@ const Actions = {
     </style></head><body>
     <div class="hd"><div><b>${esc(c.name||'The Security Mecca')}</b><br>${esc((c.addr||'').replace(/\n/g,'<br>'))}<br>Tel ${esc(c.tel||'')} · Cell ${esc(c.cell||'')}<br>VAT ${esc(c.vat||'')} · Reg ${esc(c.reg||'')}</div>
     <div style="text-align:right"><h1>${d.type==='invoice'?'Tax Invoice':'Quotation'}</h1>No: <b>${esc(d.no)}</b><br>Date: ${esc(d.date)}</div></div>
-    <div class="box"><b>To:</b> ${esc(cust.name||'')}<br>${esc(cust.addr||'')}<br>${esc(cust.phone||'')} ${cust.vat?' · VAT '+esc(cust.vat):''}</div>
-    <table><thead><tr><th>Description</th><th style="width:60px;text-align:center">Qty</th><th style="width:100px;text-align:right">Unit Price</th><th style="width:110px;text-align:right">Nett Price</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="box"><b>To:</b> ${esc(cust.name||'')}${cust.code?` &nbsp;·&nbsp; Account: <b>${esc(cust.code)}</b>`:""}<br>${esc(cust.addr||'')}<br>${esc(cust.phone||'')} ${cust.vat?' · VAT '+esc(cust.vat):''}</div>
+    <table><thead><tr><th style="width:110px">Code</th><th>Description</th><th style="width:60px;text-align:center">Qty</th><th style="width:100px;text-align:right">Unit Price</th><th style="width:110px;text-align:right">Nett Price</th></tr></thead><tbody>${rows}</tbody></table>
     <table class="tot"><tr><td>Subtotal</td><td style="text-align:right">R&nbsp;${fmtn(d.sub)}</td></tr>
       <tr><td>VAT 15%</td><td style="text-align:right">R&nbsp;${fmtn(d.vat)}</td></tr>
       <tr><td><b>TOTAL</b></td><td style="text-align:right"><b>R&nbsp;${fmtn(d.total)}</b></td></tr></table>
