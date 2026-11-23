@@ -1673,7 +1673,8 @@ const Forms = {
         <div class="f"><label>Price level for this customer</label><select id="c_level">
           ${Pricing().labels.map((lb,l)=>`<option value="${l}" ${l===(isNum(c.priceLevel)?+c.priceLevel:Pricing().custLevel)?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>
       </div>
-      <div class="f"><label>Address</label><textarea id="c_addr" rows="2">${esc(c.addr||'')}</textarea></div>
+      <div class="grid2"><div class="f"><label>Address (postal)</label><textarea id="c_addr" rows="3">${esc(c.addr||'')}</textarea></div>
+        <div class="f"><label>Deliver to (if different)</label><textarea id="c_deliv" rows="3">${esc(c.deliv||'')}</textarea></div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="Actions.saveCustomer('${id||''}')">Save</button>
       ${id&&ob?`<button class="btn" onclick="Actions.copyParty('customers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
       ${id?`<button class="btn d" onclick="Actions.delParty('customers','${id}')">Delete</button>`:''}</div>`);
@@ -1881,6 +1882,7 @@ const Forms = {
         <div class="f"><label>Customer * <span class="muted" id="d_lvl"></span></label><select id="d_cust" onchange="Forms._showLvl()"><option value="">— select —</option>${custs.map(c=>`<option value="${c.id}" ${d.customerId===c.id?'selected':''}>${esc(partyLabel(c))}</option>`).join("")}</select></div>
         <div class="f"><label>Project</label><select id="d_project">${projectOptions(d.projectId)}</select></div>
       </div>
+      <div class="f"><label>Your reference (customer's order no.)</label><input id="d_ref" value="${esc(d.ref||'')}"></div>
       <div style="overflow-x:auto"><table class="linetbl" style="min-width:560px"><thead><tr><th style="width:130px">Code</th><th>Description</th><th style="width:90px">Qty</th><th style="width:110px">Unit price</th><th style="width:110px" class="r">Nett</th><th></th></tr></thead>
       <tbody id="docLines"></tbody></table></div>
       <button class="btn sm" onclick="Forms.docAddLine()">+ line</button>
@@ -2384,7 +2386,7 @@ const Actions = {
     if(partyCodeTaken("customers",code,branch,id||null)){ toast("Customer code "+code+" is already used in "+App.branches[branch]); return; }
     const oldC=id?Store.get("customers",id):{};
     await Store.put("customers",{...oldC,id:id||undefined,branch,code,name:g("c_name"),contact:g("c_contact"),phone:g("c_phone"),
-      email:g("c_email"),vat:g("c_vat"),terms:+g("c_terms"),addr:g("c_addr"),priceLevel:+(document.getElementById("c_level")?.value||0)});
+      email:g("c_email"),vat:g("c_vat"),terms:+g("c_terms"),addr:g("c_addr"),deliv:(document.getElementById("c_deliv")?.value||""),priceLevel:+(document.getElementById("c_level")?.value||0)});
     closeModal();toast("Customer saved");
   },
   async copyParty(coll,id,to){
@@ -2525,7 +2527,7 @@ const Actions = {
   async saveDocument(id,convert){
     const g=x=>document.getElementById(x).value;
     const d=Forms._doc;
-    d.customerId=g("d_cust"); d.projectId=g("d_project"); d.date=g("d_date"); d.branch=g("d_branch");
+    d.customerId=g("d_cust"); d.projectId=g("d_project"); d.ref=(document.getElementById("d_ref")?.value||"").trim(); d.date=g("d_date"); d.branch=g("d_branch");
     d.type=convert?"invoice":g("d_type");
     d.lines=d.lines.filter(l=>l.desc&&(l.qty||l.price));
     if(!d.customerId){toast("Select a customer");return;}
@@ -2775,31 +2777,91 @@ const Actions = {
 
   /* ---- print invoice/quote ---- */
   printDoc(id){
-    const d=Store.get("documents",id); const c=Company(recBranch(d)); const cust=Store.get("customers",d.customerId)||{};
+    const d=Store.get("documents",id); if(!d) return;
+    const br=recBranch(d), c=Company(br)||{}, cust=Store.get("customers",d.customerId)||{};
     const w=window.open("","_blank");
-    const rows=(d.lines||[]).map(l=>`<tr><td>${esc(l.code||((Store.get("items",l.itemId)||{}).code)||"")}</td><td>${esc(l.desc||"")}</td><td style="text-align:center">${l.qty||0}</td><td style="text-align:right">R&nbsp;${fmtn(l.price||0)}</td><td style="text-align:right">R&nbsp;${fmtn((l.qty||0)*(l.price||0))}</td></tr>`).join("");
-    const html=`<html><head><title>${esc(d.no)}</title><style>
-      body{font-family:Arial;color:#222;padding:30px;font-size:13px}
-      .hd{display:flex;justify-content:space-between;border-bottom:3px solid #f5a623;padding-bottom:12px}
-      .hd b{font-size:22px;color:#c8860a}
-      h1{font-size:20px;text-transform:uppercase;margin:16px 0}
-      table{width:100%;border-collapse:collapse;margin-top:14px}
-      th,td{border:1px solid #ccc;padding:7px}th{background:#f5f5f5;text-align:left}
-      .tot{margin-left:auto;width:260px;margin-top:12px}
-      .tot td{border:none;padding:3px 7px}
-      .box{border:1px solid #ccc;padding:10px;margin-top:10px}
-    </style></head><body>
-    <div class="hd"><div><b>${esc(c.name||BRAND.company)}</b><br>${esc((c.addr||'').replace(/\n/g,'<br>'))}<br>Tel ${esc(c.tel||'')} · Cell ${esc(c.cell||'')}<br>VAT ${esc(c.vat||'')} · Reg ${esc(c.reg||'')}</div>
-    <div style="text-align:right"><h1>${d.type==='invoice'?'Tax Invoice':'Quotation'}</h1>No: <b>${esc(d.no)}</b><br>Date: ${esc(d.date)}</div></div>
-    <div class="box"><b>To:</b> ${esc(cust.name||'')}${cust.code?` &nbsp;·&nbsp; Account: <b>${esc(cust.code)}</b>`:""}<br>${esc(cust.addr||'')}<br>${esc(cust.phone||'')} ${cust.vat?' · VAT '+esc(cust.vat):''}</div>
-    <table><thead><tr><th style="width:110px">Code</th><th>Description</th><th style="width:60px;text-align:center">Qty</th><th style="width:100px;text-align:right">Unit Price</th><th style="width:110px;text-align:right">Nett Price</th></tr></thead><tbody>${rows}</tbody></table>
-    <table class="tot"><tr><td>Subtotal</td><td style="text-align:right">R&nbsp;${fmtn(d.sub)}</td></tr>
-      <tr><td>VAT 15%</td><td style="text-align:right">R&nbsp;${fmtn(d.vat)}</td></tr>
-      <tr><td><b>TOTAL</b></td><td style="text-align:right"><b>R&nbsp;${fmtn(d.total)}</b></td></tr></table>
-    <div class="box" style="margin-top:20px">${esc(c.bank||'Banking details on request.')}<br><br>
-    Goods remain property of ${esc(c.name||'the company')} until paid in full. Returns accepted within 7 days. E&OE.</div>
-    <script>window.print()<\/script></body></html>`;
-    w.document.write(html); w.document.close();
+    const inv=d.type==="invoice", reprint=(d.printed||0)>0;
+    const title=(reprint?"Copy ":"")+(inv?"Tax Invoice":"Quotation");
+    const nf=n=>(+n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+    const dmy=s=>{ const t=s?new Date(s+(String(s).length===10?"T00:00":"")):new Date(); return isNaN(t)?esc(s||""):String(t.getDate()).padStart(2,"0")+"/"+String(t.getMonth()+1).padStart(2,"0")+"/"+String(t.getFullYear()).slice(-2); };
+    const addDays=(s,n)=>{ const t=new Date((s||today())+"T00:00"); t.setDate(t.getDate()+n); return t.toISOString().slice(0,10); };
+    const made=d._createdAt?new Date(d._createdAt):new Date(), hms=made.toTimeString().slice(0,8);
+    const lines=t=>esc(t||"").split(/\n|,\s*/).filter(x=>x.trim()).join("<br>");
+    // header: every branch's address + phone, this branch's email
+    const brs=(typeof BR_KEYS!=="undefined"?BR_KEYS:[br]);
+    const order=[...brs.filter(k=>k!==br),br];
+    const addrRows=order.map(k=>{ const ck=Company(k)||{}; return `<tr><td class="ad">${lines(ck.addr||App.branches[k])}</td><td class="tl">Tel <b>${esc((ck.tel||"").replace(/\s+/g,""))}</b></td></tr>`; }).join("");
+    const rows=(d.lines||[]).map(l=>{ const it=Store.get("items",l.itemId)||{};
+      return `<tr><td>${esc(l.code||it.code||"")}</td><td>${esc(l.desc||"")}</td><td class="n">${nf(l.qty)}</td><td style="padding-left:6px">${esc(l.unit||it.unit||(l.itemId?"ea":""))}</td>
+        <td class="n">${nf(l.price)}</td><td class="bin">${esc(l.bin||it.bin||"")}</td><td class="n">${nf((l.qty||0)*(l.price||0))}</td></tr>`; }).join("");
+    const deliv=cust.deliv||cust.addr||"";
+    const terms=BRAND.printTerms||`All warrantees are upheld by the individual manufacturer. Customers are responsible for checking the respective websites to ensure compliance with each manufacturer's specific terms and conditions. ${esc(BRAND.company)} will not be held liable for any infringements on manufacture's specific terms and conditions. ${esc(BRAND.company)} will not be held liable for any infringements on manufacturer's recommendation.<br>No Returns on Batteries, electronics, Garage doors springs or invoices older than 7days. Only items in a new, resellable condition will be considered for credit. Consideration of credit at the discretion of ${esc(BRAND.company)} management.<div style="margin-top:8px">10% Handling Fee on returns.</div>`;
+    const logo=BRAND.logo||"icons/logo.png", base=location.href.replace(/[#?].*$/,"").replace(/[^/]*$/,"");
+    const html=`<!DOCTYPE html><html><head><title>${esc(d.no||"")}</title><style>
+      @page{size:A4;margin:9mm}
+      *{box-sizing:border-box}
+      body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:0;font-size:11.5px}
+      .pg{width:192mm;margin:0 auto}
+      .bx{border:1px solid #000}
+      .blue{color:#1a1aa6;font-weight:700}
+      .row{display:flex;gap:4mm}
+      .hl{flex:1.15;padding:8px 10px}.hr{flex:1;display:flex;flex-direction:column}
+      .hl img{max-width:300px;max-height:70px;display:block;margin-bottom:6px}
+      .hl .co{font-size:22px;font-weight:900;margin-bottom:6px}
+      .hl table{width:100%;border-collapse:collapse}.hl td{vertical-align:top;padding:2px 0}
+      .hl .tl{text-align:left;white-space:nowrap;padding-left:10px;width:42%}.hl .tl b{color:#1a1aa6}
+      .ttl{font-size:21px;font-weight:700;text-align:center;padding:10px;border-bottom:1px solid #000}
+      .kv{display:flex;justify-content:space-between;padding:6px 10px}
+      .kv.sep{border-bottom:1px solid #000}
+      .party{min-height:44mm;padding:10px 12px;flex:1}
+      .acc{margin-top:3mm;border:1px solid #000}
+      .acc table{width:100%;border-collapse:collapse}.acc td{padding:5px 8px}
+      .acc tr:first-child td{border-bottom:1px solid #000}
+      .lh{display:grid;grid-template-columns:32mm 1fr 18mm 14mm 22mm 16mm 22mm;padding:14px 6px 5px;border:1px solid #000;border-top:none;margin-bottom:2mm}
+      .lt{border:1px solid #000;min-height:88mm;padding:3px 4px}
+      .lt table{width:100%;border-collapse:collapse;table-layout:fixed}.lt td{padding:1px 2px;vertical-align:top}
+      .n{text-align:right}.bin{padding-left:12px!important}
+      .terms{font-size:10.5px;line-height:1.2;margin:4px 0 6px}
+      .ft{display:flex;gap:4mm;align-items:flex-end;page-break-inside:avoid}
+      .fl{flex:1.6;border:1px solid #000;padding:8px 10px;display:flex;justify-content:space-between;min-height:34mm;position:relative}
+      .fr{flex:1;border:1px solid #000}
+      .pay{display:flex;gap:3px;padding:3px}.pay div{flex:1;border:2px solid #000;text-align:center;font-weight:700;font-size:19px;padding:3px}
+      .tt td{padding:4px 6px}.tt{width:100%;border-collapse:collapse}.tt td+td{text-align:right;border-left:1px solid #000}
+      .tt tr+tr td{border-top:1px solid #000}.tt .big td{font-size:20px}
+      @media print{.noprint{display:none}}
+    </style></head><body><div class="pg">
+    <div class="row">
+      <div class="bx hl"><img src="${esc(base+logo)}" onerror="this.outerHTML='<div class=co>${esc(BRAND.company)}</div>'">
+        <table>${addrRows}<tr><td></td><td class="tl">eMail<br><b>${esc(c.email||"")}</b></td></tr></table></div>
+      <div class="bx hr"><div class="ttl">${title}</div>
+        <div class="kv sep" style="padding:12px 10px"><b style="font-size:14px">VAT nr.</b><span class="blue">${esc(c.vat||"")}</span><span></span></div>
+        <div class="kv"><span>Date</span><span>${dmy(d.date)}</span></div>
+        <div class="kv sep"><span>Page</span><span>1</span></div>
+        <div class="kv" style="padding:12px 10px"><span>Document &nbsp;No</span><b style="font-size:16px">${esc(d.no||"")}</b></div></div>
+    </div>
+    <div class="row" style="margin-top:3mm">
+      <div class="bx party"><div style="text-align:right;margin-right:20%">VAT nr. &nbsp;&nbsp; ${esc(cust.vat||"")}</div>
+        <div style="margin:30px 0 0 60px"><div class="blue" style="font-size:13px">${esc(cust.name||"")}</div>${lines(cust.addr)}</div></div>
+      <div class="bx party"><div>Deliver to</div><div style="margin-top:10px">${lines(deliv)}</div>${cust.vat?`<div style="margin-top:28px">Vat: ${esc(cust.vat)}</div>`:""}</div>
+    </div>
+    <div class="acc"><table>
+      <tr><td style="width:14%">Account</td><td>Your Reference</td><td style="width:13%">${dmy(d.date)}</td><td style="width:12%">${hms}</td><td style="width:14%">Sales Code</td><td style="width:13%">${inv?"Due":"Expiry"}</td><td style="width:13%"></td></tr>
+      <tr><td>${esc(cust.code||"")}</td><td colspan="3">${esc(d.ref||"")}</td><td style="padding-left:30px">${esc(d.salesCode||"1")}</td><td>${dmy(addDays(d.date,inv?(+cust.terms||0):7))}</td><td>Exclusive</td></tr></table></div>
+    <div class="lh"><span>Code</span><span>Description</span><span class="n">Quantity</span><span style="padding-left:6px">Unit</span><span class="n">Unit Price</span><span style="padding-left:12px">Bin nr.</span><span class="n">Nett Price</span></div>
+    <div class="lt"><table><colgroup><col style="width:32mm"><col><col style="width:18mm"><col style="width:14mm"><col style="width:22mm"><col style="width:16mm"><col style="width:22mm"></colgroup>${rows}</table></div>
+    <div class="terms">${terms}</div>
+    <div class="ft">
+      <div class="fl"><div style="display:flex;flex-direction:column;justify-content:space-between;width:50%">
+          <div>${inv?"":"Quotes only valid for 7days"}</div><div>Received in good order</div>
+          <div style="display:flex;justify-content:space-between"><span>Signed</span><span>Date________________</span></div></div>
+        <div style="font-weight:700;line-height:1.6;font-size:12px">${c.bank?`<div style="font-size:13px">BANKING DETAILS</div>${esc(c.bank).replace(/\n/g,"<br>")}`:""}</div></div>
+      <div class="fr"><div class="pay"><div>ACC</div><div>COD</div><div>EFT</div></div>
+        <table class="tt"><tr><td>Amount Excl Tax</td><td>${nf(d.sub)}</td></tr><tr><td>Tax</td><td>${nf(d.vat)}</td></tr>
+        <tr class="big"><td><b>Total</b></td><td>${nf(d.total)}</td></tr></table></div>
+    </div></div>
+    <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`;
+    if(w){ w.document.write(html); w.document.close(); }
+    try{ if(can("documents")) Store.put("documents",{...d,printed:(d.printed||0)+1}).catch(()=>{}); }catch(e){}
   },
 
   async exportJSON(){
