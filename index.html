@@ -135,12 +135,12 @@
 </style>
 </head>
 <body>
-<div id="authScreen" style="display:flex"><div class="authbox"><b style="color:var(--brand)">Mecca Books</b><p class="muted">Loading…</p></div></div>
+<div id="authScreen" style="display:flex"><div class="authbox"><b style="color:var(--brand)" id="loadName"></b><p class="muted">Loading…</p></div></div>
 <div class="app">
   <aside class="side" id="side">
     <div class="brand">
-      <b>Mecca Books</b>
-      <small>The Security Mecca · Accounting</small>
+      <b id="sideApp"></b>
+      <small id="sideTag"></small>
     </div>
     <div class="branchsel">
       <select id="branchSel" onchange="App.setBranch(this.value)"></select>
@@ -192,6 +192,19 @@ const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"
    STORE — abstracts the cloud db / local fallback
    ============================================================ */
 const CFG = window.MB_CONFIG || {};
+/* ---- BRANDING & BRANCHES: set per company in config.js (window.MB_CONFIG.brand) ---- */
+const BRAND = Object.assign({
+  app:"Mecca Books", company:"The Security Mecca", tagline:"The Security Mecca · Accounting",
+  owner:{user:"vivian", name:"Vivian Lohrmann"},
+  branches:{RB:"Richards Bay", VV:"Vereeniging"},
+  defaults:{RB:{name:"The Security Mecca CC",reg:"2005/140640/23",vat:"4730171792",tel:"035 789 4157",cell:"082 817 5717",email:"rbay@secmec.co.za",
+    addr:"Shop 1 Hotline Centre, 41 Bullion Boulevard, Richards Bay\nP.O Box 1185, Richards Bay Central, KZN 3900"}}
+}, CFG.brand||{});
+const BR_KEYS = Object.keys(BRAND.branches), MAIN_BR = BR_KEYS[0], MULTI = BR_KEYS.length>1;
+const BOTH = MULTI ? (BR_KEYS.length===2?"both branches":"all branches") : "the company";
+const companyDefault = b => BRAND.defaults && BRAND.defaults[b] ? {...BRAND.defaults[b]} : {name:BRAND.company+(MULTI?" "+BRAND.branches[b]:"")};
+document.title = BRAND.app+" — "+BRAND.company+" Accounting";
+[["loadName",BRAND.app],["sideApp",BRAND.app],["sideTag",BRAND.tagline]].forEach(([id,t])=>{ const e=document.getElementById(id); if(e) e.textContent=t; });
 const SHARED_COLLS = new Set(["items","settings","projects","transfers"]);   // visible to both branches
 // company documents: "ALL" (whole company) rows have no branch; branch ones belong to RB or VV, so the server keeps them separate
 const rowBranch = (coll,o) => coll==="companydocs" ? ((o.site&&o.site!=="ALL")?o.site:null) : (SHARED_COLLS.has(coll)?null:(o.branch||recBranch(o)));
@@ -390,11 +403,11 @@ const ACC = {
 const normalSide = type => (type==="Asset"||type==="Expense")?"D":"C";
 
 /* ---- branch helpers ---- */
-const recBranch = r => (r && r.branch) || "RB";           // legacy records = Richards Bay
+const recBranch = r => (r && r.branch) || MAIN_BR;       // legacy records = main branch
 const inBranch  = (r,b) => recBranch(r) === (b||App.branch);
 const branchAccounts = b => Store.all("accounts").filter(a=>inBranch(a,b||App.branch));
 const Company = b => Store.get("settings","company_"+(b||App.branch))
-                   || ((b||App.branch)==="RB" ? Store.get("settings","company") : null) || {};
+                   || ((b||App.branch)===MAIN_BR ? Store.get("settings","company") : null) || {};
 
 /* ============================================================
    LEDGER — derive balances from journals (per branch, or "ALL")
@@ -477,7 +490,7 @@ async function nextNo(key,prefix,pad,branch){
 }
 
 /* ---- stock per branch: item.stock = {RB:n, VV:n} (legacy item.qty = Richards Bay) ---- */
-function stockOf(it){ return it.stock ? it.stock : {RB:+it.qty||0}; }
+function stockOf(it){ return it.stock ? it.stock : {[MAIN_BR]:+it.qty||0}; }
 function qtyOf(it,b){ b=b||App.branch;
   if(isKit(it)){   // a kit has no stock of its own: how many can be made from the parts on hand
     if(b==="ALL") return Object.keys(App.branches).reduce((x,k)=>x+qtyOf(it,k),0);
@@ -720,7 +733,7 @@ function itemCodeTaken(code,exceptId){ code=String(code||"").trim().toLowerCase(
 
 /* ---- COMPANY DOCUMENTS: certificates, letters, contracts — files in the private 'company-docs' area ---- */
 const CDOC_CATS=["Company registration (CIPC)","SARS — tax clearance / tax PIN","SARS — VAT registration","B-BBEE certificate","COIDA — letter of good standing","UIF / Labour","PSIRA registration","Bank confirmation letter","Insurance","Lease & property","Contracts & agreements","Licences & permits","Policies & procedures","Other"];
-const CDOC_SITES=()=>({ALL:"Company (both branches)",...App.branches});
+const CDOC_SITES=()=>(MULTI?{ALL:"Company ("+BOTH+")",...App.branches}:{ALL:"Company"});
 function cdocStatus(d){
   if(!d.expires) return {cls:"",txt:"No expiry",rank:3};
   const days=Math.round((Date.parse(d.expires)-Date.parse(today()))/864e5), warn=isNum(d.remind)?+d.remind:30;
@@ -766,7 +779,7 @@ const inScope = r => scope()==="ALL" || inBranch(r,scope());
 const scopeName = () => scope()==="ALL" ? "Both branches (combined)" : App.branches[scope()];
 
 /* ============================================================
-   NAMES — show each user's name from their Mecca Books login
+   NAMES — show each user's name from their own login
    ============================================================ */
 const Names = {
   label(id){
@@ -787,11 +800,11 @@ const Names = {
    access/<userId> = {perms:{key:true}}   ·   the owner always has everything
    ============================================================ */
 const PERM_GROUPS=[
-  {g:"Branches", items:[["br_RB","Richards Bay"],["br_VV","Vereeniging"]]},
+  {g:"Branches", items:BR_KEYS.map(k=>["br_"+k,BRAND.branches[k]])},
   {g:"Sales", items:[["pos","Point of Sale"],["cashup","Daily Cash-up"],["documents","Quotes & Invoices"],["customers","Customers"],["receipts","Receipts"]]},
   {g:"Purchases", items:[["suppliers","Suppliers"],["bills","Supplier Bills"],["payments","Payments"]]},
   {g:"Banking & accounting", items:[["bank","Bank & Auto-allocate"],["accounts","Chart of Accounts"],["journals","Journals"],["projects","Projects"]]},
-  {g:"Stock", items:[["inventory","Stock / Inventory"],["kits","Kits (build & change kits)"],["scan","Scan barcodes / QR codes with the camera"],["transfer","Transfer stock between branches"]]},
+  {g:"Stock", items:[["inventory","Stock / Inventory"],["kits","Kits (build & change kits)"],["scan","Scan barcodes / QR codes with the camera"],...(MULTI?[["transfer","Transfer stock between branches"]]:[])]},
   {g:"Company documents", items:[["companyDocs","See & open company documents"],["companyDocsEdit","Upload & change company documents"]]},
   {g:"Reports", items:[["dash","Dashboard"],["vat","VAT Report"],["reports","Financial Reports"],["audit","Audit Trail"]]},
   {g:"Special rights", items:[["seeCost","See cost prices, margins & profit"],["editPrices","Change selling prices / sell at any price level"],["delete","Delete records"],["setup","Setup (company details & price levels)"],["users","Manage users & access"]]}
@@ -841,8 +854,8 @@ const NAV = [
 ];
 
 const App = {
-  route:"dash", branch:"RB", cart:[],
-  branches:{RB:"Richards Bay", VV:"Vereeniging"},
+  route:"dash", branch:MAIN_BR, cart:[],
+  branches:BRAND.branches,
 
   async start(){
     await Store.start();
@@ -1218,13 +1231,13 @@ const Views = {
 
   /* ---- Chart of accounts ---- */
   accounts(){
-    const other=App.branch==="RB"?"VV":"RB";
+    const other=BR_KEYS.find(k=>k!==App.branch);
     if(App.needSetup()) return Views._setupBanner()
-      + (branchAccounts(other).length?`<div class="banner">Or start from the <b>${App.branches[other]}</b> chart: <button class="btn sm" onclick="Actions.copyChart('${other}')">Copy ${App.branches[other]} chart</button></div>`:"");
+      + (other&&branchAccounts(other).length?`<div class="banner">Or start from the <b>${App.branches[other]}</b> chart: <button class="btn sm" onclick="Actions.copyChart('${other}')">Copy ${App.branches[other]} chart</button></div>`:"");
     const accs=branchAccounts().sort((a,b)=>a.code.localeCompare(b.code));
     const tb=Ledger.trialBalance();
-    const missing=branchAccounts(other).filter(o=>!accs.some(a=>a.code===o.code)).length;
-    return Views._branchHead(accs.length+" accounts · separate from "+App.branches[other])+`<div class="toolbar"><button class="btn p" onclick="Forms.account()">+ New ${App.branches[App.branch]} account</button>
+    const missing=other?branchAccounts(other).filter(o=>!accs.some(a=>a.code===o.code)).length:0;
+    return Views._branchHead(accs.length+" accounts"+(other?" · separate from "+App.branches[other]:""))+`<div class="toolbar"><button class="btn p" onclick="Forms.account()">+ New ${App.branches[App.branch]} account</button>
       ${missing?`<button class="btn" onclick="Actions.copyChart('${other}')">Add ${missing} account${missing>1?"s":""} that ${App.branches[other]} has</button>`:""}</div>
     <div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Account</th><th>Type</th><th class="r">Balance</th><th></th></tr></thead><tbody>
     ${accs.map(a=>`<tr><td>${esc(a.code)}</td><td>${esc(a.name)}</td><td><span class="muted">${a.type}</span></td>
@@ -1287,7 +1300,7 @@ const Views = {
       ${can("seeCost")&&allowedBranches().length>1?`<div class="kpi"><div class="l">Stock value — combined</div><div class="v">${fmt(totVal("ALL"))}</div></div>`:""}
     </div>
     <div class="toolbar"><button class="btn p" onclick="Forms.item()">+ New stock item</button>
-      ${can("transfer")?`<button class="btn" onclick="Forms.transfer()">⇄ Transfer between branches</button>`:""}
+      ${MULTI&&can("transfer")?`<button class="btn" onclick="Forms.transfer()">⇄ Transfer between branches</button>`:""}
       <input class="search" style="max-width:320px" placeholder="Search code, description or barcode…" value="${esc(App.invQ||"")}" oninput="App.invQ=this.value;Views._invFill()">
       <span class="muted" id="invCount" style="font-size:12px"></span></div>
     ${items.length?`<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Description</th><th>Bin</th>${can("seeCost")?'<th class="r">Cost</th>':''}<th>Prices (excl VAT)</th>
@@ -1519,7 +1532,7 @@ const Views = {
     const nonBr=ALL_PERMS.filter(k=>!k.startsWith("br_"));
     const rows=Object.values(Store.profiles).sort((a,b)=>(b.is_owner-a.is_owner)||(b.active-a.active)||(a.full_name||"").localeCompare(b.full_name||""));
     const pend=Store.invites||[];
-    return `<div class="banner">Each person gets their own <b>username and password</b> for Mecca Books — no claude.ai account needed. Tick exactly what they may do. The owner always has full access.</div>
+    return `<div class="banner">Each person gets their own <b>username and password</b> for ${esc(BRAND.app)} — no claude.ai account needed. Tick exactly what they may do. The owner always has full access.</div>
     <div class="toolbar"><button class="btn p" onclick="Forms.addUser()">+ Add user</button>
       <span class="muted">${rows.filter(r=>r.active).length} active logins</span></div>
     <div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Last seen</th><th>Branches</th><th>Access</th><th></th></tr></thead><tbody>
@@ -1570,7 +1583,7 @@ const Views = {
   /* ---- Setup ---- */
   _pricingCard(){
     const P=Pricing();
-    return `<div class="card"><h3>Price levels (both branches)</h3>
+    return `<div class="card"><h3>Price levels${MULTI?" ("+BOTH+")":""}</h3>
       <div class="f" style="max-width:420px"><label>Work out selling prices from cost using</label>
         <select id="pp_basis" onchange="Views._ppExample()">
           <option value="margin" ${P.basis==="margin"?"selected":""}>Margin — % of the selling price (cost ÷ (1 − %))</option>
@@ -1601,23 +1614,23 @@ const Views = {
   },
   setup(){
     const c=Company();
-    const rb=App.branch==="RB";
-    return Views._branchHead("switch branch in the side menu to edit the other branch")+`<div class="card"><h3>${App.branches[App.branch]} details (printed on this branch's quotes & invoices)</h3>
+    const rb=!!(BRAND.defaults&&BRAND.defaults[App.branch]), dfl=companyDefault(App.branch);
+    return Views._branchHead(MULTI?"switch branch in the side menu to edit the other branch":"")+`<div class="card"><h3>${App.branches[App.branch]} details (printed on this branch's quotes & invoices)</h3>
       <div class="grid2">
-        <div class="f"><label>Trading name</label><input id="s_name" value="${esc(c.name!=null?c.name:(rb?'The Security Mecca CC':''))}"></div>
-        <div class="f"><label>Registration no.</label><input id="s_reg" value="${esc(c.reg!=null?c.reg:(rb?'2005/140640/23':''))}"></div>
-        <div class="f"><label>VAT no.</label><input id="s_vat" value="${esc(c.vat!=null?c.vat:(rb?'4430 225 260':''))}"></div>
-        <div class="f"><label>Telephone</label><input id="s_tel" value="${esc(c.tel!=null?c.tel:(rb?'035 789 4157':''))}"></div>
-        <div class="f"><label>Cell</label><input id="s_cell" value="${esc(c.cell!=null?c.cell:(rb?'082 817 5717':''))}"></div>
-        <div class="f"><label>Email</label><input id="s_email" value="${esc(c.email||'')}"></div>
+        <div class="f"><label>Trading name</label><input id="s_name" value="${esc(c.name!=null?c.name:(dfl.name||''))}"></div>
+        <div class="f"><label>Registration no.</label><input id="s_reg" value="${esc(c.reg!=null?c.reg:(dfl.reg||''))}"></div>
+        <div class="f"><label>VAT no.</label><input id="s_vat" value="${esc(c.vat!=null?c.vat:(dfl.vat||''))}"></div>
+        <div class="f"><label>Telephone</label><input id="s_tel" value="${esc(c.tel!=null?c.tel:(dfl.tel||''))}"></div>
+        <div class="f"><label>Cell</label><input id="s_cell" value="${esc(c.cell!=null?c.cell:(dfl.cell||''))}"></div>
+        <div class="f"><label>Email</label><input id="s_email" value="${esc(c.email!=null?c.email:(dfl.email||''))}"></div>
       </div>
-      <div class="f"><label>Address</label><textarea id="s_addr" rows="2">${esc(c.addr!=null?c.addr:(rb?'Shop 1 Hotline Centre, 41 Bullion Boulevard, Richards Bay\\nP.O Box 1185, Richards Bay Central, KZN 3900':''))}</textarea></div>
+      <div class="f"><label>Address</label><textarea id="s_addr" rows="2">${esc(c.addr!=null?c.addr:(dfl.addr||''))}</textarea></div>
       <div class="f"><label>Banking details (printed on invoices)</label><textarea id="s_bank" rows="2">${esc(c.bank||'')}</textarea></div>
       <button class="btn p" onclick="Actions.saveCompany()">Save ${App.branches[App.branch]} details</button>
     </div>
     ${Views._pricingCard()}
-    ${can("editPrices")?`<div class="card"><h3>Import products from a spreadsheet (both branches)</h3>
-      <p class="muted" style="font-size:13px;margin-top:0">Pick an Excel (.xlsx) or .csv price list with headings such as <b>Code, Description, Unit, Bin, Barcode, Cost (excl. VAT), Trade excl., Special excl., Retail excl.</b> Products are shared by Richards Bay and Vereeniging; stock levels are never changed by an import.</p>
+    ${can("editPrices")?`<div class="card"><h3>Import products from a spreadsheet${MULTI?" ("+BOTH+")":""}</h3>
+      <p class="muted" style="font-size:13px;margin-top:0">Pick an Excel (.xlsx) or .csv price list with headings such as <b>Code, Description, Unit, Bin, Barcode, Cost (excl. VAT), Trade excl., Special excl., Retail excl.</b> ${MULTI?"Products are shared by "+Object.values(App.branches).join(" and ")+"; s":"S"}tock levels are never changed by an import.</p>
       <label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="imp_upd" checked style="width:auto"> Update products that already exist (same code)</label>
       <input type="file" id="imp_file" accept=".xlsx,.csv" onchange="Actions.importProductsFile(this)">
     </div>`:""}
@@ -1655,7 +1668,7 @@ const Forms = {
       </div>
       <div class="f"><label>Address</label><textarea id="c_addr" rows="2">${esc(c.addr||'')}</textarea></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="Actions.saveCustomer('${id||''}')">Save</button>
-      ${id?`<button class="btn" onclick="Actions.copyParty('customers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
+      ${id&&ob?`<button class="btn" onclick="Actions.copyParty('customers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
       ${id?`<button class="btn d" onclick="Actions.delParty('customers','${id}')">Delete</button>`:''}</div>`);
   },
   _autoCode(pf,coll,branch,id){
@@ -1674,7 +1687,7 @@ const Forms = {
         <div class="f"><label>Account no.</label><input id="su_acc" value="${esc(c.acc||'')}"></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="Actions.saveSupplier('${id||''}')">Save</button>
-      ${id?`<button class="btn" onclick="Actions.copyParty('suppliers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
+      ${id&&ob?`<button class="btn" onclick="Actions.copyParty('suppliers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
       ${id?`<button class="btn d" onclick="Actions.delParty('suppliers','${id}')">Delete</button>`:''}</div>`);
   },
   /* ---- Company document ---- */
@@ -1960,7 +1973,7 @@ const Forms = {
         ${g.items.map(([k,t])=>box(k,t)).join("")}</div>`).join("")}
       </div>`;
   },
-  _accRead(){ const perms={}; document.querySelectorAll(".acc_cb").forEach(cb=>{ if(cb.checked) perms[cb.dataset.k]=true; }); return perms; },
+  _accRead(){ const perms={}; document.querySelectorAll(".acc_cb").forEach(cb=>{ if(cb.checked) perms[cb.dataset.k]=true; }); if(!MULTI) perms["br_"+MAIN_BR]=true; return perms; },
   addUser(){
     modal(`<span class="close" onclick="closeModal()">✕</span><h2>Add a user</h2>
       <div class="grid3">
@@ -2203,11 +2216,7 @@ const Actions = {
       await Store.put("accounts",{id:b+"_"+code,branch:b,code,name:nm,type});
     }
     if(!Store.get("settings","company_"+b)){
-      await Store.put("settings", b==="RB"
-        ? {id:"company_RB",branch:"RB",name:"The Security Mecca CC",reg:"2005/140640/23",vat:"4430 225 260",
-           tel:"035 789 4157",cell:"082 817 5717",markup:20,
-           addr:"Shop 1 Hotline Centre, 41 Bullion Boulevard, Richards Bay\nP.O Box 1185, Richards Bay Central, KZN 3900"}
-        : {id:"company_"+b,branch:b,name:"The Security Mecca "+App.branches[b],markup:20});
+      await Store.put("settings", {...companyDefault(b), id:"company_"+b, branch:b, markup:20});
     }
     toast(App.branches[b]+" chart of accounts loaded"); App.render();
   },
@@ -2275,7 +2284,7 @@ const Actions = {
     App._import=res.items;
     modal(`<span class="close" onclick="closeModal()">✕</span><h2>Import ${res.items.length.toLocaleString()} products?</h2>
       <p><b>${res.isNew.toLocaleString()}</b> new · <b>${res.isUpd.toLocaleString()}</b> already in the list (details & prices updated)${res.skipped?` · ${res.skipped.toLocaleString()} existing skipped`:""}${res.noCode?` · ${res.noCode} rows without a code or description ignored`:""}</p>
-      <p class="muted" style="font-size:13px">Prices read from: ${res.levels.length?res.levels.map(esc).join(", "):"none — selling prices are worked out from cost with the default %"}${res.hasCost?"":" · no cost column"}. Stock levels in Richards Bay and Vereeniging are not touched.</p>
+      <p class="muted" style="font-size:13px">Prices read from: ${res.levels.length?res.levels.map(esc).join(", "):"none — selling prices are worked out from cost with the default %"}${res.hasCost?"":" · no cost column"}. Stock levels are not touched.</p>
       <div id="imp_prog" class="muted" style="margin:8px 0"></div>
       <div style="display:flex;gap:8px"><button class="btn p" id="imp_go" onclick="Actions.importProductsRun()" ${res.items.length?"":"disabled"}>Import now</button><button class="btn" onclick="closeModal()">Cancel</button></div>`);
   },
@@ -2285,7 +2294,7 @@ const Actions = {
     const pr=document.getElementById("imp_prog");
     try{ await Store.bulkPut("items",items,(d,n)=>{ if(pr) pr.textContent="Saved "+d.toLocaleString()+" of "+n.toLocaleString()+"…"; }); }
     catch(e){ if(btn) btn.disabled=false; return; }
-    App._import=null; closeModal(); toast(items.length.toLocaleString()+" products imported for both branches");
+    App._import=null; closeModal(); toast(items.length.toLocaleString()+" products imported"+(MULTI?" for "+BOTH:""));
   },
   async savePricing(){
     const g=x=>document.getElementById(x).value;
@@ -2315,7 +2324,7 @@ const Actions = {
       const nm = a.code==="1000" ? "Bank — Current ("+App.branches[to]+")" : a.name;
       await Store.put("accounts",{id:to+"_"+a.code,branch:to,code:a.code,name:nm,type:a.type}); n++;
     }
-    if(to!=="RB" && !Store.get("settings","company_"+to)) await Store.put("settings",{id:"company_"+to,branch:to,name:"The Security Mecca "+App.branches[to],markup:20});
+    if(!Store.get("settings","company_"+to)) await Store.put("settings",{...companyDefault(to),id:"company_"+to,branch:to,markup:20});
     toast(n+" accounts added to the "+App.branches[to]+" chart"); App.render();
   },
   async saveCompany(){
@@ -2738,7 +2747,7 @@ const Actions = {
       .tot td{border:none;padding:3px 7px}
       .box{border:1px solid #ccc;padding:10px;margin-top:10px}
     </style></head><body>
-    <div class="hd"><div><b>${esc(c.name||'The Security Mecca')}</b><br>${esc((c.addr||'').replace(/\n/g,'<br>'))}<br>Tel ${esc(c.tel||'')} · Cell ${esc(c.cell||'')}<br>VAT ${esc(c.vat||'')} · Reg ${esc(c.reg||'')}</div>
+    <div class="hd"><div><b>${esc(c.name||BRAND.company)}</b><br>${esc((c.addr||'').replace(/\n/g,'<br>'))}<br>Tel ${esc(c.tel||'')} · Cell ${esc(c.cell||'')}<br>VAT ${esc(c.vat||'')} · Reg ${esc(c.reg||'')}</div>
     <div style="text-align:right"><h1>${d.type==='invoice'?'Tax Invoice':'Quotation'}</h1>No: <b>${esc(d.no)}</b><br>Date: ${esc(d.date)}</div></div>
     <div class="box"><b>To:</b> ${esc(cust.name||'')}${cust.code?` &nbsp;·&nbsp; Account: <b>${esc(cust.code)}</b>`:""}<br>${esc(cust.addr||'')}<br>${esc(cust.phone||'')} ${cust.vat?' · VAT '+esc(cust.vat):''}</div>
     <table><thead><tr><th style="width:110px">Code</th><th>Description</th><th style="width:60px;text-align:center">Qty</th><th style="width:100px;text-align:right">Unit Price</th><th style="width:110px;text-align:right">Nett Price</th></tr></thead><tbody>${rows}</tbody></table>
@@ -2832,13 +2841,13 @@ App.cartDel=function(i){ App.cart.splice(i,1); App.render(); };
 
 /* ---- boot ---- */
 /* ============================================================
-   AUTH — own Mecca Books usernames & passwords (no claude.ai needed)
+   AUTH — own usernames & passwords (no claude.ai needed)
    ============================================================ */
 const Auth = {
   _screen(html){
     let el=document.getElementById("authScreen");
     if(!el){ el=document.createElement("div"); el.id="authScreen"; document.body.appendChild(el); }
-    el.innerHTML=`<div class="authbox"><div class="brand" style="border:0;padding:0 0 14px"><b>Mecca Books</b><small>The Security Mecca · Accounting</small></div>${html}</div>`;
+    el.innerHTML=`<div class="authbox"><div class="brand" style="border:0;padding:0 0 14px"><b>${esc(BRAND.app)}</b><small>${esc(BRAND.tagline)}</small></div>${html}</div>`;
     el.style.display="flex";
   },
   hide(){ const el=document.getElementById("authScreen"); if(el) el.style.display="none"; },
@@ -2865,10 +2874,10 @@ const Auth = {
   },
   ownerSetup(){
     this._screen(`<h2 style="margin:0 0 8px;font-size:18px">Create the owner login</h2>
-      <p class="muted" style="font-size:13px">Only works once, for the owner username set in the database setup (normally <b>vivian</b>).</p>
+      <p class="muted" style="font-size:13px">Only works once, for the owner username set in the database setup (normally <b>${esc(BRAND.owner.user)}</b>).</p>
       <form onsubmit="event.preventDefault();Auth.createOwner()">
-        <div class="f"><label>Owner username</label><input id="ow_user" value="vivian" autocapitalize="none"></div>
-        <div class="f"><label>Your name</label><input id="ow_name" value="Vivian Lohrmann"></div>
+        <div class="f"><label>Owner username</label><input id="ow_user" value="${esc(BRAND.owner.user)}" autocapitalize="none"></div>
+        <div class="f"><label>Your name</label><input id="ow_name" value="${esc(BRAND.owner.name)}"></div>
         <div class="f"><label>Choose a password (at least 8 characters)</label><input id="ow_pass" type="password" autocomplete="new-password"></div>
         <div class="f"><label>Repeat password</label><input id="ow_pass2" type="password" autocomplete="new-password"></div>
         <button class="btn p" style="width:100%;padding:11px">Create owner login</button>
