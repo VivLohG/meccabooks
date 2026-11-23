@@ -2855,7 +2855,7 @@ const Actions = {
           <div>${inv?"":"Quotes only valid for 7days"}</div><div>Received in good order</div>
           <div style="display:flex;justify-content:space-between"><span>Signed</span><span>Date________________</span></div></div>
         <div style="font-weight:700;line-height:1.6;font-size:12px">${c.bank?`<div style="font-size:13px">BANKING DETAILS</div>${esc(c.bank).replace(/\n/g,"<br>")}`:""}</div></div>
-      <div class="fr"><div class="pay"><div>ACC</div><div>COD</div><div>EFT</div></div>
+      <div class="fr"><div class="pay"><div>ACC</div><div style="flex:1.7;white-space:nowrap">CASH/CARD</div><div>EFT</div></div>
         <table class="tt"><tr><td>Amount Excl Tax</td><td>${nf(d.sub)}</td></tr><tr><td>Tax</td><td>${nf(d.vat)}</td></tr>
         <tr class="big"><td><b>Total</b></td><td>${nf(d.total)}</td></tr></table></div>
     </div></div>
