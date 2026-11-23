@@ -105,7 +105,14 @@ language sql stable as $$
     when 'accounts' then public.has_perm('accounts')
     when 'settings' then public.has_perm('setup')
     when 'items'    then (not is_insert) or public.has_perm('inventory') or public.has_perm('editPrices')
+    when 'companydocs' then public.has_perm('companyDocsEdit')
     else true end;
+$$;
+
+-- which collections need a special right to read (company documents are private)
+create or replace function public.coll_read_ok(c text) returns boolean
+language sql stable as $$
+  select case c when 'companydocs' then public.has_perm('companyDocs') else true end;
 $$;
 
 -- ---------------------------------------------------------------------
@@ -122,14 +129,15 @@ drop policy if exists docs_insert on public.docs;
 drop policy if exists docs_update on public.docs;
 drop policy if exists docs_delete on public.docs;
 create policy docs_read   on public.docs for select to authenticated
-  using (public.is_member() and public.can_branch(branch));
+  using (public.is_member() and public.can_branch(branch) and public.coll_read_ok(coll));
 create policy docs_insert on public.docs for insert to authenticated
   with check (public.is_member() and public.can_branch(branch) and public.coll_write_ok(coll, true));
 create policy docs_update on public.docs for update to authenticated
-  using (public.is_member() and public.can_branch(branch))
+  using (public.is_member() and public.can_branch(branch) and public.coll_read_ok(coll))
   with check (public.is_member() and public.can_branch(branch) and public.coll_write_ok(coll, false));
 create policy docs_delete on public.docs for delete to authenticated
-  using (public.has_perm('delete') and public.can_branch(branch));
+  using (public.has_perm('delete') and public.can_branch(branch)
+         and (coll <> 'companydocs' or public.has_perm('companyDocsEdit')));
 
 drop policy if exists audit_read on public.audit;
 create policy audit_read on public.audit for select to authenticated
@@ -336,6 +344,24 @@ grant execute on function public.touch() to authenticated;
 -- ---------------------------------------------------------------------
 -- 9. INVOICE IMAGES (private storage, per branch folder)
 -- ---------------------------------------------------------------------
+-- private file area: <ALL|RB|VV>/<document id>/<file>, 20 MB per file
+insert into storage.buckets (id, name, public, file_size_limit) values ('company-docs', 'company-docs', false, 20971520)
+on conflict (id) do update set public = false, file_size_limit = 20971520;
+
+drop policy if exists cdoc_files_read   on storage.objects;
+drop policy if exists cdoc_files_insert on storage.objects;
+drop policy if exists cdoc_files_delete on storage.objects;
+create policy cdoc_files_read on storage.objects for select to authenticated
+  using (bucket_id = 'company-docs' and public.is_member() and public.has_perm('companyDocs')
+         and (split_part(name, '/', 1) = 'ALL' or public.can_branch(split_part(name, '/', 1))));
+create policy cdoc_files_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'company-docs' and public.is_member() and public.has_perm('companyDocsEdit')
+         and (split_part(name, '/', 1) = 'ALL' or public.can_branch(split_part(name, '/', 1))));
+create policy cdoc_files_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'company-docs' and public.has_perm('companyDocsEdit') and public.has_perm('delete')
+         and (split_part(name, '/', 1) = 'ALL' or public.can_branch(split_part(name, '/', 1))));
+
+
 insert into storage.buckets (id, name, public) values ('invoices', 'invoices', false)
 on conflict (id) do nothing;
 

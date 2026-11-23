@@ -177,7 +177,7 @@
 
 const VAT_RATE = 0.15;
 const COLLECTIONS = ["accounts","customers","suppliers","items","documents",
-  "journals","payments","projects","banktxns","bankrules","cashups","settings","counters","transfers","access","people"];
+  "journals","payments","projects","banktxns","bankrules","cashups","settings","counters","transfers","access","people","companydocs"];
 const AUDIT_SKIP = new Set(["counters","audit","people"]);
 
 /* ---------- money helpers ---------- */
@@ -193,6 +193,8 @@ const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"
    ============================================================ */
 const CFG = window.MB_CONFIG || {};
 const SHARED_COLLS = new Set(["items","settings","projects","transfers"]);   // visible to both branches
+// company documents: "ALL" (whole company) rows have no branch; branch ones belong to RB or VV, so the server keeps them separate
+const rowBranch = (coll,o) => coll==="companydocs" ? ((o.site&&o.site!=="ALL")?o.site:null) : (SHARED_COLLS.has(coll)?null:(o.branch||recBranch(o)));
 const toEmail = u => { u=String(u||"").trim().toLowerCase(); return u.includes("@") ? u : u+"@"+(CFG.emailDomain||"staff.secmec.co.za"); };
 const normUser = u => String(u||"").trim().toLowerCase().replace(/\s+/g,".");
 function niceErr(e){
@@ -295,9 +297,9 @@ const Store = {
   async put(coll,obj){
     if(!obj.id) obj.id=uid();
     const existed=!!(this._snap[coll]&&this._snap[coll][obj.id]);
-    const shared=SHARED_COLLS.has(coll);
+    const shared=SHARED_COLLS.has(coll)||coll==="companydocs";
     if(!shared && !obj.branch) obj.branch=recBranch(obj);
-    const branch = shared ? null : obj.branch;
+    const branch = rowBranch(coll,obj);
     obj._by=this.uid; obj._at=Date.now();
     if(!existed){ obj._createdBy=this.uid; obj._createdAt=obj._at; }
     this.data[coll][obj.id]=obj; if(coll==="items") this._iv=(this._iv||0)+1; this._emit();   // show it straight away
@@ -324,10 +326,10 @@ const Store = {
   },
   /* save many records at once (product import, re-price all): 500 rows per request */
   async bulkPut(coll,objs,onProgress){
-    const sb=this.client(), shared=SHARED_COLLS.has(coll); let done=0;
+    const sb=this.client(), shared=SHARED_COLLS.has(coll)||coll==="companydocs"; let done=0;
     for(let i=0;i<objs.length;i+=500){
       const part=objs.slice(i,i+500).map(o=>{ if(!o.id) o.id=uid(); if(!shared && !o.branch) o.branch=recBranch(o);
-        return {coll,id:o.id,branch:shared?null:o.branch,data:this._clean(o)}; });
+        return {coll,id:o.id,branch:rowBranch(coll,o),data:this._clean(o)}; });
       const { data, error } = await sb.from("docs").upsert(part,{onConflict:"coll,id"}).select("id");
       if(error || !data || data.length!==part.length){
         await this.loadAll();
@@ -716,6 +718,22 @@ function nextItemCode(name,exceptId){
 function itemCodeTaken(code,exceptId){ code=String(code||"").trim().toLowerCase();
   return !!code && Store.all("items").some(x=>x.id!==exceptId && String(x.code||"").trim().toLowerCase()===code); }
 
+/* ---- COMPANY DOCUMENTS: certificates, letters, contracts — files in the private 'company-docs' area ---- */
+const CDOC_CATS=["Company registration (CIPC)","SARS — tax clearance / tax PIN","SARS — VAT registration","B-BBEE certificate","COIDA — letter of good standing","UIF / Labour","PSIRA registration","Bank confirmation letter","Insurance","Lease & property","Contracts & agreements","Licences & permits","Policies & procedures","Other"];
+const CDOC_SITES=()=>({ALL:"Company (both branches)",...App.branches});
+function cdocStatus(d){
+  if(!d.expires) return {cls:"",txt:"No expiry",rank:3};
+  const days=Math.round((Date.parse(d.expires)-Date.parse(today()))/864e5), warn=isNum(d.remind)?+d.remind:30;
+  if(days<0) return {cls:"bad",txt:"Expired "+(-days)+" day"+(days===-1?"":"s")+" ago",rank:0,days};
+  if(days===0) return {cls:"bad",txt:"Expires today",rank:0,days};
+  if(days<=warn) return {cls:"warn",txt:"Expires in "+days+" day"+(days===1?"":"s"),rank:1,days};
+  return {cls:"good",txt:"Valid until "+d.expires,rank:2,days};
+}
+const cdocVisible = d => (d.site||"ALL")==="ALL" || can("br_"+d.site);
+const cdocScoped = d => cdocVisible(d) && (scope()==="ALL" || (d.site||"ALL")==="ALL" || d.site===scope());
+function cdocAlerts(){ return Store.all("companydocs").filter(cdocVisible).map(d=>({d,s:cdocStatus(d)})).filter(x=>x.s.rank<=1).sort((a,b)=>a.s.days-b.s.days); }
+const fileSize = n => n>=1048576 ? (n/1048576).toFixed(1)+" MB" : Math.max(1,Math.round(n/1024))+" KB";
+
 /* ---- product search (thousands of products: never draw them all at once) ---- */
 function sortedItems(){
   const n=Object.keys(Store.data.items||{}).length;
@@ -774,6 +792,7 @@ const PERM_GROUPS=[
   {g:"Purchases", items:[["suppliers","Suppliers"],["bills","Supplier Bills"],["payments","Payments"]]},
   {g:"Banking & accounting", items:[["bank","Bank & Auto-allocate"],["accounts","Chart of Accounts"],["journals","Journals"],["projects","Projects"]]},
   {g:"Stock", items:[["inventory","Stock / Inventory"],["kits","Kits (build & change kits)"],["scan","Scan barcodes / QR codes with the camera"],["transfer","Transfer stock between branches"]]},
+  {g:"Company documents", items:[["companyDocs","See & open company documents"],["companyDocsEdit","Upload & change company documents"]]},
   {g:"Reports", items:[["dash","Dashboard"],["vat","VAT Report"],["reports","Financial Reports"],["audit","Audit Trail"]]},
   {g:"Special rights", items:[["seeCost","See cost prices, margins & profit"],["editPrices","Change selling prices / sell at any price level"],["delete","Delete records"],["setup","Setup (company details & price levels)"],["users","Manage users & access"]]}
 ];
@@ -817,6 +836,7 @@ const NAV = [
   {id:"audit",ic:"🛡",t:"Audit Trail"},
   {grp:"Admin"},
   {id:"users",ic:"🔑",t:"Users & Access"},
+  {id:"companyDocs",ic:"🗂",t:"Company Documents"},
   {id:"setup",ic:"⚙",t:"Setup"}
 ];
 
@@ -899,7 +919,7 @@ const App = {
       return;
     }
     const fn = Views[this.route]||Views.dash;
-    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); if(this.route==="pos") Views._posFill(); if(this.route==="inventory") Views._invFill(); if(this.route==="kits") Views._kitFill(); if(this.route==="scan") Views._scanAfter(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
+    try{ el.innerHTML = fn(); if(this.route==="setup") Views._ppExample(); if(this.route==="pos") Views._posFill(); if(this.route==="inventory") Views._invFill(); if(this.route==="kits") Views._kitFill(); if(this.route==="scan") Views._scanAfter(); if(this.route==="companyDocs") Views._cdFill(); Names.fill(el); }catch(e){ el.innerHTML=`<div class="banner">Error rendering: ${esc(e.message)}</div>`; console.error(e); }
   },
   quickAdd(){
     const map={documents:()=>Forms.document(),customers:()=>Forms.customer(),suppliers:()=>Forms.supplier(),
@@ -964,7 +984,11 @@ const Views = {
     const profit = money(income-expense);
     const vat = money(-Ledger.accountBalance(ACC.vatOut,null,sc) - Ledger.accountBalance(ACC.vatIn,null,sc));
     const recentDocs = Store.all("documents").filter(d=>inScope(d)&&d.type!=="bill").sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,6);
-    return s+Views._scopeSel()+`
+    const cda=can("companyDocs")?cdocAlerts().filter(x=>cdocScoped(x.d)):[];
+    return s+Views._scopeSel()+(cda.length?`<div class="card" style="border-left:4px solid ${cda.some(x=>x.s.rank===0)?'var(--bad)':'var(--warn)'}">
+      <h3>🗂 Company documents needing attention</h3>
+      ${cda.slice(0,6).map(x=>`<div style="padding:4px 0;cursor:pointer" onclick="App.go('companyDocs')"><b>${esc(x.d.title)}</b> — <span style="color:var(${x.s.rank===0?'--bad':'--warn'})">${esc(x.s.txt)}</span></div>`).join("")}
+      ${cda.length>6?`<div class="muted">and ${cda.length-6} more…</div>`:""}</div>`:"")+`
     <div class="kpis">
       <div class="kpi"><div class="l">Cash & Bank</div><div class="v">${fmt(bankBal)}</div></div>
       <div class="kpi"><div class="l">Debtors owe you</div><div class="v good">${fmt(debtors)}</div></div>
@@ -1269,6 +1293,43 @@ const Views = {
     ${items.length?`<div class="tbl-wrap"><table><thead><tr><th>Code</th><th>Description</th><th>Bin</th>${can("seeCost")?'<th class="r">Cost</th>':''}<th>Prices (excl VAT)</th>
       ${br.map(([k,v])=>`<th class="r" style="${sc===k?'color:var(--brand)':''}">${v}</th>`).join("")}<th class="r" style="${sc==='ALL'?'color:var(--brand)':''}">Total</th>${can("seeCost")?`<th class="r">Value (${sc==="ALL"?"combined":App.branches[sc]})</th>`:""}<th></th></tr></thead>
       <tbody id="iRows"></tbody></table></div>`:`<div class="empty">No stock items yet.</div>`}`+Views._transfers();
+  },
+  /* ---- Company Documents ---- */
+  companyDocs(){
+    const all=Store.all("companydocs").filter(cdocScoped), al=all.map(cdocStatus);
+    const exp=al.filter(x=>x.rank===0).length, soon=al.filter(x=>x.rank===1).length;
+    return Views._scopeSel()+`
+    <div class="kpis">
+      <div class="kpi"><div class="l">Documents</div><div class="v">${all.length}</div></div>
+      <div class="kpi"><div class="l">Expired</div><div class="v ${exp?'bad':''}">${exp}</div></div>
+      <div class="kpi"><div class="l">Expiring soon</div><div class="v" style="${soon?'color:var(--warn)':''}">${soon}</div></div>
+    </div>
+    <div class="toolbar" style="flex-wrap:wrap">
+      ${can("companyDocsEdit")?`<button class="btn p" onclick="Forms.companyDoc()">+ Add document</button>`:""}
+      <input class="search" style="max-width:280px" placeholder="Search title, reference, notes…" value="${esc(App.cdQ||"")}" oninput="App.cdQ=this.value;Views._cdFill()">
+      <select style="max-width:230px" onchange="App.cdCat=this.value;Views._cdFill()"><option value="">All categories</option>${CDOC_CATS.map(c=>`<option ${App.cdCat===c?"selected":""}>${esc(c)}</option>`).join("")}</select>
+      <label style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" style="width:auto" ${App.cdDue?"checked":""} onchange="App.cdDue=this.checked;Views._cdFill()"> Expired / expiring only</label>
+      <span class="muted" id="cdCount" style="font-size:12px"></span>
+    </div>
+    ${all.length?`<div class="tbl-wrap"><table><thead><tr><th>Document</th><th>Category</th><th>For</th><th>Reference</th><th>Expiry</th><th>File</th><th></th></tr></thead><tbody id="cdRows"></tbody></table></div>`
+      :`<div class="empty">No company documents yet.${can("companyDocsEdit")?" Tap <b>+ Add document</b> to upload your CIPC papers, tax clearance, B-BBEE, COIDA, PSIRA, insurance and so on — add expiry dates and the app warns you before they run out.":""}</div>`}`;
+  },
+  _cdFill(){
+    const tb=document.getElementById("cdRows"); if(!tb) return;
+    const sites=CDOC_SITES(), q=String(App.cdQ||"").trim().toLowerCase(), words=q?q.split(/\s+/):[];
+    const list=Store.all("companydocs").filter(cdocScoped).map(d=>({d,s:cdocStatus(d)}))
+      .filter(({d,s})=>(!App.cdCat||d.cat===App.cdCat) && (!App.cdDue||s.rank<=1)
+        && words.every(w=>[d.title,d.ref,d.notes,d.cat].join(" ").toLowerCase().includes(w)))
+      .sort((a,b)=>a.s.rank-b.s.rank || (a.s.days??1e9)-(b.s.days??1e9) || (a.d.title||"").localeCompare(b.d.title||""));
+    tb.innerHTML=list.map(({d,s})=>{ const f=(d.files||[])[0];
+      return `<tr><td><b>${esc(d.title)}</b>${d.notes?`<div class="muted" style="font-size:12px">${esc(d.notes.length>80?d.notes.slice(0,80)+"…":d.notes)}</div>`:""}</td>
+      <td style="font-size:12px">${esc(d.cat||"")}</td><td style="font-size:12px">${esc(sites[d.site||"ALL"]||d.site)}</td>
+      <td style="font-size:12px">${esc(d.ref||"")}${d.issued?`<div class="muted">Issued ${esc(d.issued)}</div>`:""}</td>
+      <td><span class="pill" style="${s.cls==='bad'?'background:#5a2a30;color:#ffb3bb':s.cls==='warn'?'background:#5a4520;color:#ffd27a':s.cls==='good'?'background:#2a4a3a;color:#8fe3bd':'background:#333;color:#bbb'}">${esc(s.txt)}</span></td>
+      <td>${f?`<button class="btn sm" onclick="Actions.openCompanyDoc('${d.id}',0)">Open</button><div class="muted" style="font-size:11px">${esc(f.name)}${(d.files||[]).length>1?` · ${d.files.length} versions`:""}</div>`:'<span class="muted">no file</span>'}</td>
+      <td class="r">${can("companyDocsEdit")?`<button class="btn sm" onclick="Forms.companyDoc('${d.id}')">Edit</button>`:`<button class="btn sm" onclick="Forms.companyDoc('${d.id}')">Details</button>`}</td></tr>`; }).join("")
+      || `<tr><td colspan="7" class="muted" style="padding:20px;text-align:center">No document matches.</td></tr>`;
+    const c=document.getElementById("cdCount"); if(c) c.textContent=list.length+" shown";
   },
   /* ---- Scan barcode / QR ---- */
   scan(){
@@ -1615,6 +1676,44 @@ const Forms = {
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn p" onclick="Actions.saveSupplier('${id||''}')">Save</button>
       ${id?`<button class="btn" onclick="Actions.copyParty('suppliers','${id}','${ob}')">Copy to ${App.branches[ob]}</button>`:''}
       ${id?`<button class="btn d" onclick="Actions.delParty('suppliers','${id}')">Delete</button>`:''}</div>`);
+  },
+  /* ---- Company document ---- */
+  companyDoc(id){
+    const d=id?Store.get("companydocs",id):{site:"ALL",remind:30,files:[]};
+    if(!d) return; const ed=can("companyDocsEdit"), dis=ed?"":"disabled", sites=CDOC_SITES();
+    Forms._cdFile=null;
+    modal(`<span class="close" onclick="closeModal()">✕</span><h2>${id?(ed?'Edit':'')+' company document':'Add company document'}</h2>
+      <div class="grid2">
+        <div class="f"><label>Title *</label><input id="cd_title" ${dis} value="${esc(d.title||'')}" placeholder="e.g. Tax clearance certificate 2026"></div>
+        <div class="f"><label>Category</label><select id="cd_cat" ${dis}>${CDOC_CATS.map(c=>`<option ${d.cat===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
+        <div class="f"><label>For</label><select id="cd_site" ${dis}>${Object.entries(sites).filter(([k])=>k==="ALL"||can("br_"+k)).map(([k,v])=>`<option value="${k}" ${(d.site||"ALL")===k?"selected":""}>${esc(v)}</option>`).join("")}</select></div>
+        <div class="f"><label>Reference / certificate no.</label><input id="cd_ref" ${dis} value="${esc(d.ref||'')}"></div>
+        <div class="f"><label>Issued</label><input id="cd_issued" type="date" ${dis} value="${esc(d.issued||'')}"></div>
+        <div class="f"><label>Expires (leave blank if it doesn't)</label><input id="cd_expires" type="date" ${dis} value="${esc(d.expires||'')}"></div>
+        <div class="f"><label>Warn me this many days before expiry</label><input id="cd_remind" type="number" min="0" ${dis} value="${isNum(d.remind)?d.remind:30}"></div>
+      </div>
+      <div class="f"><label>Notes</label><textarea id="cd_notes" rows="2" ${dis}>${esc(d.notes||'')}</textarea></div>
+      ${ed?`<div class="f"><label>${(d.files||[]).length?"Upload a new version (renewed certificate etc.)":"File"} — PDF, photo, Word or Excel, up to 20 MB</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input type="file" id="cd_file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx,.txt" onchange="Forms._cdPick(this)" style="max-width:260px">
+          <label class="btn" style="margin:0">📷 Take photo<input type="file" accept="image/*" capture="environment" style="display:none" onchange="Forms._cdPick(this)"></label>
+          <span id="cd_picked" class="muted" style="font-size:12px"></span></div></div>`:""}
+      ${(d.files||[]).length?`<h3 style="margin:10px 0 6px;font-size:13px;color:var(--muted)">FILES (newest first)</h3>
+        ${d.files.map((f,k)=>`<div style="padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;justify-content:space-between">
+          <span>${k===0?'<b>Current</b> · ':''}${esc(f.name)} <span class="muted" style="font-size:12px">${fileSize(f.size||0)} · ${new Date(f.at||0).toLocaleDateString("en-ZA")} · ${esc(Names.label(f.by))}</span></span>
+          <button class="btn sm" onclick="Actions.openCompanyDoc('${d.id}',${k})">Open</button></div>`).join("")}`:""}
+      <div id="cd_prog" class="muted" style="margin:8px 0"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${ed?`<button class="btn p" id="cd_save" onclick="Actions.saveCompanyDoc('${id||''}')">Save</button>`:""}
+        ${id&&ed&&can("delete")?`<button class="btn d" onclick="Actions.delCompanyDoc('${id}')">Delete</button>`:""}
+        <button class="btn" onclick="closeModal()">${ed?"Cancel":"Close"}</button></div>`, true);
+  },
+  _cdPick(inp){
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    if(f.size>20*1048576){ toast("That file is "+fileSize(f.size)+" — the limit is 20 MB"); inp.value=""; return; }
+    Forms._cdFile=f; const t=document.getElementById("cd_title");
+    if(t && !t.value.trim()) t.value=f.name.replace(/\.[^.]+$/,"").replace(/[_-]+/g," ");
+    document.getElementById("cd_picked").textContent="Ready to upload: "+f.name+" ("+fileSize(f.size)+")";
   },
   /* ---- Kit: pick the products that make it up ---- */
   kit(id){
@@ -2266,6 +2365,43 @@ const Actions = {
     if(partyCodeTaken("suppliers",code,branch,id||null)){ toast("Supplier code "+code+" is already used in "+App.branches[branch]); return; }
     await Store.put("suppliers",{...old,id:id||undefined,branch,code,name:g("su_name"),contact:g("su_contact"),phone:g("su_phone"),acc:g("su_acc")});
     closeModal();toast("Supplier saved");
+  },
+  async saveCompanyDoc(id){
+    if(!can("companyDocsEdit")){ toast("You need the right to upload company documents"); return; }
+    const g=x=>document.getElementById(x).value.trim();
+    if(!g("cd_title")){ toast("Give the document a title"); return; }
+    const old=id?Store.get("companydocs",id):null;
+    if(g("cd_expires") && g("cd_issued") && g("cd_expires")<g("cd_issued")){ toast("Expiry date is before the issue date"); return; }
+    const rec={...(old||{}), id:id||uid(), title:g("cd_title"), cat:g("cd_cat"), site:g("cd_site")||"ALL", ref:g("cd_ref"),
+      issued:g("cd_issued"), expires:g("cd_expires"), remind:+g("cd_remind")||0, notes:document.getElementById("cd_notes").value.trim(), files:[...((old&&old.files)||[])]};
+    const f=Forms._cdFile;
+    if(!old && !f && !confirm("Save without a file? You can add one later.")) return;
+    const btn=document.getElementById("cd_save"); if(btn) btn.disabled=true;
+    if(f){
+      const pr=document.getElementById("cd_prog"); if(pr) pr.textContent="Uploading "+f.name+"…";
+      const safe=f.name.replace(/[^A-Za-z0-9._-]+/g,"_").slice(-80)||"file";
+      const path=(rec.site||"ALL")+"/"+rec.id+"/"+Date.now()+"-"+safe;
+      const { error } = await Store.client().storage.from("company-docs").upload(path,f,{contentType:f.type||"application/octet-stream",upsert:false});
+      if(error){ if(btn) btn.disabled=false; if(pr) pr.textContent=""; toast("Upload failed — "+niceErr(error)); return; }
+      rec.files.unshift({path,name:f.name,size:f.size,type:f.type||"",at:Date.now(),by:Store.uid});
+    }
+    await Store.put("companydocs",rec);
+    Forms._cdFile=null; closeModal(); toast((f?"Uploaded & saved: ":"Saved: ")+rec.title);
+  },
+  async openCompanyDoc(id,k){
+    const d=Store.get("companydocs",id), f=d&&(d.files||[])[k||0]; if(!f) return;
+    const w=window.open("","_blank");   // open straight away so phones don't block the pop-up
+    const { data, error } = await Store.client().storage.from("company-docs").createSignedUrl(f.path,600);
+    if(error || !data){ if(w) w.close(); toast("Couldn't open the file — "+(error?niceErr(error):"not found")); return; }
+    if(w) w.location.href=data.signedUrl; else location.href=data.signedUrl;
+  },
+  async delCompanyDoc(id){
+    const d=Store.get("companydocs",id); if(!d) return;
+    if(!confirm("Delete \""+d.title+"\" and its "+((d.files||[]).length||"")+" file(s)? This can't be undone.")) return;
+    const paths=(d.files||[]).map(f=>f.path);
+    if(paths.length){ const { error } = await Store.client().storage.from("company-docs").remove(paths);
+      if(error){ toast("Files not deleted — "+niceErr(error)); return; } }
+    await Actions.delRec("companydocs",id);
   },
   async saveKit(){
     const K=Forms._kit, g=x=>document.getElementById(x).value.trim();
