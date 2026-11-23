@@ -389,3 +389,11 @@ end $$;
 insert into public.invites (username, full_name, is_owner)
 values ('vivian', 'Vivian Lohrmann', true)
 on conflict (username) do nothing;
+
+-- Newer Supabase projects no longer give signed-in users table access by default.
+-- Without these, sign-in shows "Login not active". (Row-level security still applies.)
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.profiles, public.invites, public.docs to authenticated;
+grant select on public.audit to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+grant execute on function public.is_member(), public.is_owner(), public.has_perm(text), public.can_branch(text), public.coll_write_ok(text, boolean), public.coll_read_ok(text) to authenticated;
