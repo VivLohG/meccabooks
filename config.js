@@ -6,5 +6,7 @@ window.MB_CONFIG = {
   url: "https://cdfwenlyuoyhcccdtokk.supabase.co",
   anonKey: "sb_publishable_rnstzosaYV-XaIcy69GSYg_PA3cdEKu",
   // logins are usernames; behind the scenes they become  username@staff.secmec.co.za  (no email is ever sent)
-  emailDomain: "staff.secmec.co.za"
+  emailDomain: "staff.secmec.co.za",
+  // where this app keeps its sign-in on the device (each company's app must use its own)
+  storageKey: "meccabooks-auth"
 };

@@ -229,7 +229,7 @@ const Store = {
 
   client(){
     if(!this.sb) this.sb = window.supabase.createClient(CFG.url, CFG.anonKey,
-      {auth:{persistSession:true, autoRefreshToken:true, storageKey:"meccabooks-auth"}});
+      {auth:{persistSession:true, autoRefreshToken:true, storageKey:CFG.storageKey||("auth-"+String(CFG.url||"").replace(/^https?:\/\//,"").split(".")[0])}});
     return this.sb;
   },
 
