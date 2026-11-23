@@ -90,6 +90,13 @@
   .modal .close{float:right;cursor:pointer;color:var(--muted);font-size:20px;line-height:1}
   .linetbl td{padding:5px 6px;border-bottom:1px solid var(--line)}
   .linetbl input,.linetbl select{padding:6px 7px}
+  @media(max-width:640px){.linetbl th:first-child{width:96px!important}}
+  .sugbox{position:fixed;z-index:9999;display:none;max-height:320px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  .sugbox .sug{display:grid;grid-template-columns:110px 1fr auto auto;gap:10px;align-items:center;padding:7px 10px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)}
+  .sugbox .sug.on,.sugbox .sug:hover{background:rgba(255,255,255,.07)}
+  .sugbox .sc{font-weight:700;font-family:ui-monospace,monospace;font-size:12px;word-break:break-all}
+  .sugbox .sq{color:var(--muted);font-size:11px;white-space:nowrap}.sugbox .sp{white-space:nowrap;text-align:right}
+  @media(max-width:640px){.sugbox .sug{grid-template-columns:90px 1fr auto}.sugbox .sq{display:none}}
   .totbox{margin-top:12px;margin-left:auto;max-width:300px}
   .totbox .tr{display:flex;justify-content:space-between;padding:4px 0}
   .totbox .tr.g{border-top:1px solid var(--line);margin-top:6px;padding-top:8px;font-weight:700;font-size:16px}
@@ -1874,8 +1881,8 @@ const Forms = {
         <div class="f"><label>Customer * <span class="muted" id="d_lvl"></span></label><select id="d_cust" onchange="Forms._showLvl()"><option value="">— select —</option>${custs.map(c=>`<option value="${c.id}" ${d.customerId===c.id?'selected':''}>${esc(partyLabel(c))}</option>`).join("")}</select></div>
         <div class="f"><label>Project</label><select id="d_project">${projectOptions(d.projectId)}</select></div>
       </div>
-      <table class="linetbl"><thead><tr><th>Description</th><th style="width:90px">Qty</th><th style="width:110px">Unit price</th><th style="width:110px" class="r">Nett</th><th></th></tr></thead>
-      <tbody id="docLines"></tbody></table>
+      <div style="overflow-x:auto"><table class="linetbl" style="min-width:560px"><thead><tr><th style="width:130px">Code</th><th>Description</th><th style="width:90px">Qty</th><th style="width:110px">Unit price</th><th style="width:110px" class="r">Nett</th><th></th></tr></thead>
+      <tbody id="docLines"></tbody></table></div>
       <button class="btn sm" onclick="Forms.docAddLine()">+ line</button>
       <div class="totbox"><div class="tr"><span>Subtotal</span><span id="d_sub">R 0.00</span></div>
         <div class="tr"><span>VAT 15%</span><span id="d_vat">R 0.00</span></div>
@@ -1897,31 +1904,66 @@ const Forms = {
     document.getElementById("d_cust").innerHTML=`<option value="">— select —</option>`+custs.map(c=>`<option value="${c.id}">${esc(partyLabel(c))}</option>`).join("");
   },
   docRenderLines(){
-    const items=Store.all("items").sort((a,b)=>a.name.localeCompare(b.name));
     const tb=document.getElementById("docLines");
     tb.innerHTML=Forms._doc.lines.map((l,i)=>`<tr>
-      <td><input list="itemlist" value="${esc(l.desc||'')}" oninput="Forms.docLine(${i},'desc',this.value)" placeholder="Type item code or description">${l.code?`<div class="muted" style="font-size:11px">${esc(l.code)}</div>`:""}</td>
+      <td><input value="${esc(l.code||'')}" autocomplete="off" placeholder="Code" oninput="Forms.docCode(${i},this)" onfocus="Forms.docSuggest(${i},this)" onkeydown="Forms.docKey(event,${i},this)" onblur="Forms.docHide()"></td>
+      <td><input value="${esc(l.desc||'')}" autocomplete="off" oninput="Forms.docLine(${i},'desc',this.value);if(this.isConnected)Forms.docSuggest(${i},this)" onfocus="Forms.docSuggest(${i},this)" onkeydown="Forms.docKey(event,${i},this)" onblur="Forms.docHide()" placeholder="Search code or description"></td>
       <td><input type="number" value="${l.qty!=null?l.qty:1}" oninput="Forms.docLine(${i},'qty',this.value)"></td>
       <td><input type="number" step="0.01" value="${l.price!=null?l.price:''}" oninput="Forms.docLine(${i},'price',this.value)" ${l.itemId&&!can("editPrices")?"readonly title='Stock price - locked for your login'":""}></td>
       <td class="r">${fmt((l.qty||0)*(l.price||0))}</td>
-      <td><span style="cursor:pointer;color:var(--bad)" onclick="Forms.docDelLine(${i})">✕</span></td></tr>`).join("")
-      +`<datalist id="itemlist">${items.map(i=>`<option value="${esc(i.name)}">${esc(i.code||"")}</option>`).join("")}</datalist>`;
+      <td><span style="cursor:pointer;color:var(--bad)" onclick="Forms.docDelLine(${i})">✕</span></td></tr>`).join("");
     Forms.docTotals();
   },
+  // pick a stock item for line i: fills code, description and the customer's price
+  docPick(i,id){
+    const it=Store.get("items",id); if(!it) return; const l=Forms._doc.lines[i];
+    if(l.itemId===it.id && l.price!=null && l.price!==""){ l.desc=l.desc||it.name; l.code=it.code||""; }
+    else { const lv=Forms._docLevel(), pv=priceOf(it,lv);
+      if(pv==null) toast("No "+Pricing().labels[lv]+" price on "+it.name+" — enter it manually");
+      Object.assign(l,{itemId:it.id,code:it.code||"",desc:it.name,price:pv!=null?pv:"",level:lv}); if(l.qty==null) l.qty=1; }
+    Forms.docHide(); Forms.docRenderLines();
+    const r=document.querySelectorAll("#docLines tr")[i]; if(r){ const q=r.children[2].querySelector("input"); q.focus(); q.select(); }
+  },
+  docCode(i,el){ const l=Forms._doc.lines[i], v=el.value.trim();
+    l.code=v; if(l.itemId){ const it=Store.get("items",l.itemId); if(!it||!codeMatch(it,v)) delete l.itemId; }
+    const ex=Forms._docExact(v); if(ex && ex.name!==v && ex.id!==l.itemId) return Forms.docPick(i,ex.id);
+    Forms.docSuggest(i,el); },
+  // a scanned / fully typed code (or exact product name) picks the item straight away,
+  // unless other codes still start with what was typed (then wait for Enter or a tap)
+  _docExact(v){ v=String(v||"").trim(); if(!v) return null; const lv=v.toLowerCase(), all=Store.all("items");
+    const byName=all.find(x=>x.name===v); if(byName) return byName;
+    const m=all.filter(x=>codeMatch(x,v)); if(m.length!==1) return null;
+    return all.some(x=>x!==m[0]&&(x.code||"").toLowerCase().startsWith(lv)) ? null : m[0]; },
+  _sug:{i:-1,list:[],sel:0,el:null},
+  docSuggest(i,el){
+    const q=el.value.trim(), r=findItems(q,12), S=Forms._sug;
+    S.i=i; S.list=r.list; S.sel=0; S.el=el;
+    let box=document.getElementById("docSug");
+    if(!box){ box=document.createElement("div"); box.id="docSug"; box.className="sugbox"; document.body.appendChild(box); }
+    if(!q||!r.list.length){ box.style.display="none"; return; }
+    const lv=Forms._docLevel();
+    box.innerHTML=r.list.map((it,k)=>{ const pv=priceOf(it,lv);
+      return `<div class="sug${k===0?' on':''}" onmousedown="event.preventDefault();Forms.docPick(${i},'${it.id}')">
+        <span class="sc">${esc(it.code||"—")}</span><span class="sn">${esc(it.name)}</span>
+        <span class="sq">${isKit(it)?"kit ":""}${qtyOf(it,Forms._doc.branch||App.branch)} on hand</span><span class="sp">${pv!=null?fmt(pv):""}</span></div>`; }).join("")
+      +(r.total>r.list.length?`<div class="muted" style="padding:6px 10px;font-size:12px">${r.total-r.list.length} more — keep typing to narrow down</div>`:"");
+    const b=el.getBoundingClientRect(), w=Math.min(Math.max(b.width,460),window.innerWidth-16);
+    box.style.left=Math.max(8,Math.min(b.left,window.innerWidth-w-8))+"px"; box.style.top=(b.bottom+2)+"px"; box.style.width=w+"px"; box.style.display="block";
+  },
+  docHide(){ setTimeout(()=>{ const b=document.getElementById("docSug"); if(b) b.style.display="none"; },120); },
+  docKey(e,i,el){ const S=Forms._sug, box=document.getElementById("docSug"), open=box&&box.style.display==="block"&&S.i===i;
+    if(!open||!S.list.length) return;
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); S.sel=(S.sel+(e.key==="ArrowDown"?1:-1)+S.list.length)%S.list.length;
+      box.querySelectorAll(".sug").forEach((d,k)=>d.classList.toggle("on",k===S.sel)); }
+    else if(e.key==="Enter"){ e.preventDefault(); Forms.docPick(i,S.list[S.sel].id); }
+    else if(e.key==="Escape"){ box.style.display="none"; } },
   docLine(i,field,val){
     if(field==="price" && Forms._doc.lines[i].itemId && !can("editPrices")) return;
-    if(field==="desc"){ Forms._doc.lines[i].desc=val;
-      const v=String(val).trim(), it=Store.all("items").find(x=>x.name===v) || Store.all("items").find(x=>codeMatch(x,v));
-      if(it && it.name!==v) Forms._doc.lines[i].desc=it.name;
-      if(it && (Forms._doc.lines[i].price==null||Forms._doc.lines[i].price==="")){
-        const lv=Forms._docLevel(), pv=priceOf(it,lv);
-        if(pv==null) toast("No "+Pricing().labels[lv]+" price on "+it.name+" — enter it manually");
-        Forms._doc.lines[i].price=pv!=null?pv:""; Forms._doc.lines[i].itemId=it.id; Forms._doc.lines[i].code=it.code||""; Forms._doc.lines[i].level=lv;
-        Forms.docRenderLines(); return; }
-    } else Forms._doc.lines[i][field]=+val;
+    if(field==="desc"){ Forms._doc.lines[i].desc=val; const ex=Forms._docExact(val);
+      if(ex && ex.id!==Forms._doc.lines[i].itemId) return Forms.docPick(i,ex.id); }
+    else Forms._doc.lines[i][field]=+val;
     Forms.docTotals();
-    // update nett cell
-    const row=document.querySelectorAll("#docLines tr")[i]; if(row) row.children[3].textContent=fmt((Forms._doc.lines[i].qty||0)*(Forms._doc.lines[i].price||0));
+    const row=document.querySelectorAll("#docLines tr")[i]; if(row) row.children[4].textContent=fmt((Forms._doc.lines[i].qty||0)*(Forms._doc.lines[i].price||0));
   },
   docAddLine(){ Forms._doc.lines.push({qty:1}); Forms.docRenderLines(); },
   docDelLine(i){ Forms._doc.lines.splice(i,1); if(!Forms._doc.lines.length)Forms._doc.lines=[{qty:1}]; Forms.docRenderLines(); },
